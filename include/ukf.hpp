@@ -13,15 +13,13 @@ namespace ukf
 
   void cholesky(const MatrixXd &in, MatrixXd &out);
 
-  void merwe_sigma_points(const int state_dim, const double alpha, const double beta, const int kappa,
-                          const MatrixXd &x, const MatrixXd &P,
-                          MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc);
+  void merwe_sigmas(const int state_dim, const double alpha, const double beta, const int kappa,
+                    const MatrixXd &x, const MatrixXd &P,
+                    MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc);
 
-  void unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm,
-                      MatrixXd &x);
+  MatrixXd unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm);
 
-  void unscented_covariance(const MatrixXd &sigma_points, const MatrixXd &Wc, const MatrixXd &x, const MatrixXd &Q,
-                            MatrixXd &P);
+  MatrixXd unscented_covariance(const MatrixXd &sigma_points, const MatrixXd &Wc, const MatrixXd &x, const MatrixXd &Q);
 
   void unscented_transform(const MatrixXd &sigma_points, const MatrixXd &Wm, const MatrixXd &Wc, const MatrixXd &Q,
                            MatrixXd &x, MatrixXd &P);
@@ -39,7 +37,9 @@ namespace ukf
     double beta_;             // β=2 is a good choice for Gaussian problems
     int kappa_;               // κ=3−state_dim_ is a good choice
 
-    MatrixXd sigma_points_;   // Sigma points
+    MatrixXd sigmas_;         // Sigma points
+    MatrixXd sigmas_p_;       // Predicted sigma points = f(sigma_points)
+    MatrixXd sigmas_z_;       // Sigma points in measurement space = h(f(sigma_points))
     MatrixXd Wm_;             // Weights for computing mean
     MatrixXd Wc_;             // Weights for computing covariance
 
@@ -49,6 +49,9 @@ namespace ukf
 
     std::function<void(const double, Ref<MatrixXd>)> f_;          // State transition function
     std::function<void(const Ref<MatrixXd>, Ref<MatrixXd>)> h_;   // Measurement function
+
+    std::function<void(const Ref<MatrixXd> x, const Ref<MatrixXd> mean, Ref<MatrixXd> y)> residual_x_;
+    std::function<void(const Ref<MatrixXd> z, const Ref<MatrixXd> mean, Ref<MatrixXd> y)> residual_z_;
 
   public:
 

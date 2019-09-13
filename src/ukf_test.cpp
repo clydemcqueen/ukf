@@ -31,7 +31,7 @@ void test_cholesky()
   std::cout << (allclose(t, square) ? "Cholesky OK" : "Cholesky FAIL") << std::endl;
 }
 
-void test_generate_sigma_points()
+void test_generate_sigmas()
 {
   std::cout << "\n========= GENERATE SIGMA POINTS =========\n" << std::endl;
 
@@ -52,17 +52,17 @@ void test_generate_sigma_points()
 
     MatrixXd Wm;
     MatrixXd Wc;
-    MatrixXd sigma_points;
+    MatrixXd sigmas;
 
-    ukf::merwe_sigma_points(state_dim, alpha, beta, kappa_offset - state_dim, x, P, sigma_points, Wm, Wc);
+    ukf::merwe_sigmas(state_dim, alpha, beta, kappa_offset - state_dim, x, P, sigmas, Wm, Wc);
 
     std::cout << "Wm:" << std::endl << Wm << std::endl;
     std::cout << "Wc:" << std::endl << Wc << std::endl;
-    std::cout << "Sigma points (column vectors):" << std::endl << sigma_points << std::endl;
+    std::cout << "Sigma points (column vectors):" << std::endl << sigmas << std::endl;
 
     int num_points = 2 * state_dim + 1;
-    assert(Wc.rows() == 1 && Wm.rows() == 1 && sigma_points.rows() == x.rows());
-    assert(Wc.cols() == num_points && Wm.cols() == num_points && sigma_points.cols() == num_points);
+    assert(Wc.rows() == 1 && Wm.rows() == 1 && sigmas.rows() == x.rows());
+    assert(Wc.cols() == num_points && Wm.cols() == num_points && sigmas.cols() == num_points);
   }
 }
 
@@ -89,27 +89,22 @@ void test_unscented_transform()
 
     MatrixXd Wm;
     MatrixXd Wc;
-    MatrixXd sigma_points;
+    MatrixXd sigmas;
 
     // Generate sigma points
-    ukf::merwe_sigma_points(state_dim, alpha, beta, kappa_offset - state_dim, x, P, sigma_points, Wm, Wc);
-    // std::cout << "Sigma points (column vectors):" << std::endl << sigma_points << std::endl;
+    ukf::merwe_sigmas(state_dim, alpha, beta, kappa_offset - state_dim, x, P, sigmas, Wm, Wc);
 
     // Assume process model f() == identity
-    MatrixXd sigma_points_f = sigma_points;
+    MatrixXd sigmas_p = sigmas;
 
-    // Compute mean of sigma_points_f
-    MatrixXd x_f;
-    ukf::unscented_mean(sigma_points_f, Wm, x_f);
+    // Compute mean of sigmas_p
+    MatrixXd x_f = ukf::unscented_mean(sigmas_p, Wm);
     assert(x_f.rows() == x.rows() && x_f.cols() == 1);
-    // std::cout << "x_f:" << std::endl << x_f << std::endl;
     std::cout << (allclose(x, x_f) ? "mean OK" : "mean FAIL") << std::endl;
 
-    // Compute covariance of sigma_points_f
-    MatrixXd P_f;
-    ukf::unscented_covariance(sigma_points_f, Wc, x_f, Q, P_f);
+    // Compute covariance of sigmas_p
+    MatrixXd P_f = ukf::unscented_covariance(sigmas_p, Wc, x_f, Q);
     assert(P_f.rows() == P.rows() && P_f.cols() == P.cols());
-    // std::cout << "P_f:" << std::endl << P_f << std::endl;
     std::cout << (allclose(P, P_f) ? "covar OK" : "covar FAIL") << std::endl;
   }
 }
@@ -171,7 +166,7 @@ void test_filter()
 int main(int argc, char **argv)
 {
   test_cholesky();
-  test_generate_sigma_points();
+  test_generate_sigmas();
   test_unscented_transform();
   test_filter();
   return 0;

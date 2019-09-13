@@ -32,9 +32,9 @@ namespace ukf
   }
 
   // Generate Merwe scaled sigma points
-  void merwe_sigma_points(const int state_dim, const double alpha, const double beta, const int kappa,
-                          const MatrixXd &x, const MatrixXd &P,
-                          MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc)
+  void merwe_sigmas(const int state_dim, const double alpha, const double beta, const int kappa,
+                    const MatrixXd &x, const MatrixXd &P,
+                    MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc)
   {
     int num_points = 2 * state_dim + 1;
     double lambda = alpha * alpha * (state_dim + kappa) - state_dim;
@@ -61,55 +61,52 @@ namespace ukf
   // Residual in state space
   // Not useful for angles
   // TODO support custom residual functions
-  void residual_x(const MatrixXd &x, const MatrixXd &mean,
-                  MatrixXd &y)
+  MatrixXd residual_x(const MatrixXd &x, const MatrixXd &mean)
   {
-    y = x - mean;
+    return x - mean;
   }
 
   // Residual in measurement space
   // Not useful for angles
   // TODO support custom residual functions
-  void residual_z(const MatrixXd &z, const MatrixXd &mean,
-                  MatrixXd &y)
+  MatrixXd residual_z(const MatrixXd &z, const MatrixXd &mean)
   {
-    y = z - mean;
+    return z - mean;
   }
 
   // sum of { Wm[i] * f(sigma[i]) }
   // Not useful for angles
   // TODO support custom mean functions
-  void unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm,
-                      MatrixXd &x)
+  MatrixXd unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm)
   {
-    x = MatrixXd::Zero(sigma_points.rows(), 1);
+    MatrixXd x = MatrixXd::Zero(sigma_points.rows(), 1);
 
     for (int i = 0; i < sigma_points.cols(); ++i) {
       x += Wm(0, i) * sigma_points.col(i);
     }
+
+    return x;
   }
 
   // sum of { Wc[i] * (f(sigma[i]) - mean) * (f(sigma[i]) - mean).T } + Q
-  void unscented_covariance(const MatrixXd &sigma_points, const MatrixXd &Wc, const MatrixXd &x, const MatrixXd &Q,
-                            MatrixXd &P)
+  MatrixXd unscented_covariance(const MatrixXd &sigma_points, const MatrixXd &Wc, const MatrixXd &x, const MatrixXd &Q)
   {
-    P = MatrixXd::Zero(x.rows(), x.rows());
+    MatrixXd P = MatrixXd::Zero(x.rows(), x.rows());
 
     for (int i = 0; i < sigma_points.cols(); ++i) {
-      MatrixXd y;
-      residual_x(sigma_points.col(i), x, y);
+      MatrixXd y = residual_x(sigma_points.col(i), x);
       P += Wc(0, i) * (y * y.transpose());
     }
 
-    P += Q;
+    return P + Q;
   }
 
   // Compute the unscented transform
   void unscented_transform(const MatrixXd &sigma_points, const MatrixXd &Wm, const MatrixXd &Wc, const MatrixXd &Q,
                            MatrixXd &x, MatrixXd &P)
   {
-    unscented_mean(sigma_points, Wm, x);
-    unscented_covariance(sigma_points, Wc, x, Q, P);
+    x = unscented_mean(sigma_points, Wm);
+    P = unscented_covariance(sigma_points, Wc, x, Q);
   }
 
   //========================================================================
@@ -132,6 +129,8 @@ namespace ukf
     Q_ = MatrixXd::Identity(state_dim, state_dim);
     f_ = nullptr;
     h_ = nullptr;
+    residual_x_ = nullptr;
+    residual_z_ = nullptr;
   }
 
   void UnscentedKalmanFilter::set_x(const MatrixXd &x)
@@ -165,15 +164,17 @@ namespace ukf
   void UnscentedKalmanFilter::predict(double dt)
   {
     // Generate sigma points
-    ukf::merwe_sigma_points(state_dim_, alpha_, beta_, kappa_, x_, P_, sigma_points_, Wm_, Wc_);
+    ukf::merwe_sigmas(state_dim_, alpha_, beta_, kappa_, x_, P_, sigmas_, Wm_, Wc_);
 
     // Predict the state at t + dt for each sigma point
-    for (int i = 0; i < sigma_points_.cols(); ++i) {
-      f_(dt, sigma_points_.col(i));
+    sigmas_p_ = sigmas_;
+    for (int i = 0; i < sigmas_p_.cols(); ++i) {
+      f_(dt, sigmas_p_.col(i));
     }
 
     // Find mean and covariance of the predicted sigma points
-    ukf::unscented_transform(sigma_points_, Wm_, Wc_, Q_, x_, P_);
+    // TODO save as x_p_ and P_p_
+    ukf::unscented_transform(sigmas_p_, Wm_, Wc_, Q_, x_, P_);
   }
 
   void UnscentedKalmanFilter::update(const MatrixXd &z, const MatrixXd &R)
@@ -182,37 +183,31 @@ namespace ukf
     assert(R.rows() == measurement_dim_ && R.cols() == measurement_dim_);
 
     // Transform sigma points into measurement space
-    MatrixXd sigma_points_z = MatrixXd(measurement_dim_, sigma_points_.cols());
-    for (int i = 0; i < sigma_points_.cols(); ++i) {
-      h_(sigma_points_.col(i), sigma_points_z.col(i));
+    sigmas_z_ = MatrixXd(measurement_dim_, sigmas_p_.cols());
+    for (int i = 0; i < sigmas_p_.cols(); ++i) {
+      h_(sigmas_p_.col(i), sigmas_z_.col(i));
     }
 
     // Find mean and covariance of sigma points in measurement space
     MatrixXd x_z;
     MatrixXd P_z;
-    ukf::unscented_transform(sigma_points_z, Wm_, Wc_, R, x_z, P_z);
+    ukf::unscented_transform(sigmas_z_, Wm_, Wc_, R, x_z, P_z);
 
     // Find cross covariance of the sigma points in the state and measurement spaces
     MatrixXd P_xz = MatrixXd::Zero(state_dim_, measurement_dim_);
-    for (int i = 0; i < sigma_points_z.cols(); ++i) {
-
-      MatrixXd y_x;
-      residual_x(sigma_points_.col(i), x_, y_x);
-
-      MatrixXd y_z;
-      residual_z(sigma_points_z.col(i), x_z, y_z);
-
-      P_xz += Wc_(0, i) * (y_x * y_z.transpose());
+    for (int i = 0; i < sigmas_z_.cols(); ++i) {
+      MatrixXd y_p = residual_x(sigmas_p_.col(i), x_);  // TODO x_p_
+      MatrixXd y_z = residual_z(sigmas_z_.col(i), x_z);
+      P_xz += Wc_(0, i) * (y_p * y_z.transpose());
     }
 
     // Kalman gain
     MatrixXd K = P_xz * P_z.inverse();
 
     // Combine measurement and prediction into a new estimate
-    MatrixXd y_z;
-    residual_z(z, x_z, y_z);
-    x_ = x_ + K * y_z;
-    P_ = P_ - K * P_z * K.transpose();
+    MatrixXd y_z = residual_z(z, x_z);
+    x_ = x_ + K * y_z; // TODO x_p_
+    P_ = P_ - K * P_z * K.transpose();  // TODO P_p_
   }
 
 } // namespace ukf
