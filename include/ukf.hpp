@@ -47,8 +47,8 @@ namespace ukf
     MatrixXd P_;              // State covariance
     MatrixXd Q_;              // Process covariance
 
-    std::function<void(const double, Ref<MatrixXd>)> f_;          // State transition function
-    std::function<void(const Ref<MatrixXd>, Ref<MatrixXd>)> h_;   // Measurement function
+    std::function<void(const double, Ref<MatrixXd>, const Ref<MatrixXd>)> f_;   // State transition function
+    std::function<void(const Ref<MatrixXd>, Ref<MatrixXd>)> h_;                 // Measurement function
 
     std::function<void(const Ref<MatrixXd> x, const Ref<MatrixXd> mean, Ref<MatrixXd> y)> residual_x_;
     std::function<void(const Ref<MatrixXd> z, const Ref<MatrixXd> mean, Ref<MatrixXd> y)> residual_z_;
@@ -64,6 +64,7 @@ namespace ukf
     ~UnscentedKalmanFilter()
     {}
 
+    // TODO document the API
     const auto &x() const
     { return x_; }
 
@@ -76,11 +77,13 @@ namespace ukf
 
     void set_Q(const MatrixXd &Q);
 
-    void set_f(const std::function<void(const double, Ref<MatrixXd>)> &f);
+    // f(dt, x, u)
+    void set_f(const std::function<void(const double, Ref<MatrixXd>, const Ref<MatrixXd>)> &f);
 
     void set_h(const std::function<void(const Ref<MatrixXd>, Ref<MatrixXd>)> &h);
 
-    void predict(double dt);
+    // u is passed to f(dt, x, u)
+    void predict(double dt, const Ref<MatrixXd> u);
 
     void update(const MatrixXd &z, const MatrixXd &R);
   };

@@ -151,7 +151,7 @@ namespace ukf
     Q_ = Q;
   }
 
-  void UnscentedKalmanFilter::set_f(const std::function<void(const double, Ref<MatrixXd>)> &f)
+  void UnscentedKalmanFilter::set_f(const std::function<void(const double, Ref<MatrixXd>, const Ref<MatrixXd>)> &f)
   {
     f_ = f;
   }
@@ -161,7 +161,7 @@ namespace ukf
     h_ = h;
   }
 
-  void UnscentedKalmanFilter::predict(double dt)
+  void UnscentedKalmanFilter::predict(double dt, const Ref<MatrixXd> u)
   {
     // Generate sigma points
     ukf::merwe_sigmas(state_dim_, alpha_, beta_, kappa_, x_, P_, sigmas_, Wm_, Wc_);
@@ -169,7 +169,7 @@ namespace ukf
     // Predict the state at t + dt for each sigma point
     sigmas_p_ = sigmas_;
     for (int i = 0; i < sigmas_p_.cols(); ++i) {
-      f_(dt, sigmas_p_.col(i));
+      f_(dt, sigmas_p_.col(i), u);
     }
 
     // Find mean and covariance of the predicted sigma points
