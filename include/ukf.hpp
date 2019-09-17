@@ -7,22 +7,34 @@ namespace ukf
 {
   using namespace Eigen;
 
+  // Eigen Refs provide a way to pass in a reference to a column or row while avoiding copies.
+  // There are 2 forms:
+  //    Read-write:  void foo1(Ref<VectorXf> x);
+  //    Read-only:   void foo2(const Ref<const VectorXf> &x);
+  // From https://eigen.tuxfamily.org/dox/classEigen_1_1Ref.html
+
   //========================================================================
   // Unscented math
   //========================================================================
 
+  typedef std::function<void(const double dt, const MatrixXd &u, Ref<MatrixXd> x)> TransitionFn;
+  typedef std::function<void(const Ref<const MatrixXd> x, Ref<MatrixXd> z)> MeasurementFn;
+
+  typedef std::function<MatrixXd(const Ref<const MatrixXd> &m, const MatrixXd &mean)> ResidualFn;
+  typedef std::function<MatrixXd(const MatrixXd &sigma_points, const MatrixXd &Wm)> UnscentedMeanFn;
+
   void cholesky(const MatrixXd &in, MatrixXd &out);
 
   void merwe_sigmas(const int state_dim, const double alpha, const double beta, const int kappa,
-                    const MatrixXd &x, const MatrixXd &P,
-                    MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc);
+                    const MatrixXd &x, const MatrixXd &P, MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc);
 
   MatrixXd unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm);
 
-  MatrixXd unscented_covariance(const MatrixXd &sigma_points, const MatrixXd &Wc, const MatrixXd &x, const MatrixXd &Q);
+  MatrixXd unscented_covariance(const ResidualFn &r_x_fn, const MatrixXd &sigma_points, const MatrixXd &Wc,
+                                const MatrixXd &x, const MatrixXd &Q);
 
-  void unscented_transform(const MatrixXd &sigma_points, const MatrixXd &Wm, const MatrixXd &Wc, const MatrixXd &Q,
-                           MatrixXd &x, MatrixXd &P);
+  void unscented_transform(const ResidualFn &r_x_fn, const UnscentedMeanFn &mean_fn, const MatrixXd &sigma_points,
+                           const MatrixXd &Wm, const MatrixXd &Wc, const MatrixXd &Q, MatrixXd &x, MatrixXd &P);
 
   //========================================================================
   // UnscentedKalmanFilter
@@ -30,60 +42,94 @@ namespace ukf
 
   class UnscentedKalmanFilter
   {
-    int state_dim_;           // Size of state space
-    int measurement_dim_;     // Size of measurement space
+    // Inputs
+    // The filter doesn't care about the dimensionality of u, so there's no control_dim
+    int state_dim_;             // Size of state space
+    int measurement_dim_;       // Size of measurement space
+    MatrixXd Q_;                // Process covariance
 
-    double alpha_;            // Generally 0≤α≤1, larger value spreads the sigma points further from the mean
-    double beta_;             // β=2 is a good choice for Gaussian problems
-    int kappa_;               // κ=3−state_dim_ is a good choice
+    // Additional inputs: constants for generating Merwe sigma points
+    double alpha_;              // Generally 0≤α≤1, larger value spreads the sigma points further from the mean
+    double beta_;               // β=2 is a good choice for Gaussian problems
+    int kappa_;                 // κ=3−state_dim_ is a good choice
 
-    MatrixXd sigmas_;         // Sigma points
-    MatrixXd sigmas_p_;       // Predicted sigma points = f(sigma_points)
-    MatrixXd sigmas_z_;       // Sigma points in measurement space = h(f(sigma_points))
-    MatrixXd Wm_;             // Weights for computing mean
-    MatrixXd Wc_;             // Weights for computing covariance
+    // Current state
+    MatrixXd x_;                // Mean
+    MatrixXd P_;                // Covariance
 
-    MatrixXd x_;              // State mean
-    MatrixXd P_;              // State covariance
-    MatrixXd Q_;              // Process covariance
+    // State after the predict step
+    MatrixXd sigmas_p_;         // Predicted sigma points = f(sigma_points)
+    MatrixXd Wm_;               // Weights for computing mean
+    MatrixXd Wc_;               // Weights for computing covariance
+    MatrixXd x_p_;              // Predicted mean
+    MatrixXd P_p_;              // Predicted covariance
 
-    std::function<void(const double, Ref<MatrixXd>, const Ref<MatrixXd>)> f_;   // State transition function
-    std::function<void(const Ref<MatrixXd>, Ref<MatrixXd>)> h_;                 // Measurement function
+    // State after the update step, for diagnostics
+    MatrixXd K_;                // Kalman gain
 
-    std::function<void(const Ref<MatrixXd> x, const Ref<MatrixXd> mean, Ref<MatrixXd> y)> residual_x_;
-    std::function<void(const Ref<MatrixXd> z, const Ref<MatrixXd> mean, Ref<MatrixXd> y)> residual_z_;
+    // These functions must be provided
+    TransitionFn f_fn_;         // State transition function
+    MeasurementFn h_fn_;        // Measurement function
+
+    // Defaults are provided for these functions, but they can be overridden
+    ResidualFn r_x_fn_;         // Compute x - mean
+    ResidualFn r_z_fn_;         // Compute z - mean_in_z_space
+    UnscentedMeanFn mean_x_fn_; // Compute the mean of the sigma points
+    UnscentedMeanFn mean_z_fn_; // Compute the mean of the sigma points in z space
 
   public:
 
-    explicit UnscentedKalmanFilter(int state_dim, int measurement_dim) :
-      UnscentedKalmanFilter(state_dim, measurement_dim, 0.3, 2, 3 - state_dim)
-    {}
-
-    explicit UnscentedKalmanFilter(int state_dim, int measurement_dim, double alpha, double beta, int kappa_offset);
+    explicit UnscentedKalmanFilter(int state_dim, int measurement_dim, double alpha, double beta, int kappa);
 
     ~UnscentedKalmanFilter()
     {}
 
-    // TODO document the API
     const auto &x() const
     { return x_; }
 
     const auto &P() const
     { return P_; }
 
-    void set_x(const MatrixXd &x);
+    const auto &K() const
+    { return K_; }
 
-    void set_P(const MatrixXd &P);
+    void set_x(const MatrixXd &x)
+    {
+      assert(x.rows() == state_dim_ && x.cols() == 1);
+      x_ = x;
+    }
 
-    void set_Q(const MatrixXd &Q);
+    void set_P(const MatrixXd &P)
+    {
+      assert(P.rows() == state_dim_ && P.cols() == state_dim_);
+      P_ = P;
+    }
 
-    // f(dt, x, u)
-    void set_f(const std::function<void(const double, Ref<MatrixXd>, const Ref<MatrixXd>)> &f);
+    void set_Q(const MatrixXd &Q)
+    {
+      assert(Q.rows() == state_dim_ && Q.cols() == state_dim_);
+      Q_ = Q;
+    }
 
-    void set_h(const std::function<void(const Ref<MatrixXd>, Ref<MatrixXd>)> &h);
+    void set_f_fn(const TransitionFn &f_fn)
+    { f_fn_ = f_fn; }
 
-    // u is passed to f(dt, x, u)
-    void predict(double dt, const Ref<MatrixXd> u);
+    void set_h_fn(const MeasurementFn &h_fn)
+    { h_fn_ = h_fn; }
+
+    void set_r_x_fn(const ResidualFn &r_x_fn)
+    { r_x_fn_ = r_x_fn; }
+
+    void set_r_z_fn(const ResidualFn &r_z_fn)
+    { r_z_fn_ = r_z_fn; }
+
+    void set_mean_x_fn(const UnscentedMeanFn &mean_x_fn)
+    { mean_x_fn_ = mean_x_fn; }
+
+    void set_mean_z_fn(const UnscentedMeanFn &mean_z_fn)
+    { mean_z_fn_ = mean_z_fn; }
+
+    void predict(double dt, const MatrixXd &u);
 
     void update(const MatrixXd &z, const MatrixXd &R);
   };
