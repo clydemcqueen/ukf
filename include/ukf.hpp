@@ -51,7 +51,7 @@ namespace ukf
     // Additional inputs: constants for generating Merwe sigma points
     double alpha_;              // Generally 0≤α≤1, larger value spreads the sigma points further from the mean
     double beta_;               // β=2 is a good choice for Gaussian problems
-    int kappa_;                 // κ=3−state_dim_ is a good choice
+    int kappa_;                 // κ=0 is a good default
 
     // Current state
     MatrixXd x_;                // Mean
