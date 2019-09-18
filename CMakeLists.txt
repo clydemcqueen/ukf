@@ -25,6 +25,16 @@ include_directories(
 )
 
 #=============
+# Library
+#=============
+
+add_library(
+  ukf SHARED
+  src/ukf.cpp
+)
+ament_export_libraries(ukf)
+
+#=============
 # Test
 #=============
 
@@ -34,15 +44,25 @@ add_executable(
   src/ukf.cpp
 )
 
-ament_target_dependencies(
-  ukf_test
-)
-
 #=============
 # Install
 #=============
 
-# Install targets
+# Export include directory
+ament_export_include_directories(include)
+
+# Install include directory
+install(DIRECTORY include/${PROJECT_NAME} DESTINATION include)
+
+## Install library
+install(
+  TARGETS ukf
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+# Install executable
 install(
   TARGETS ukf_test
   DESTINATION lib/${PROJECT_NAME}
