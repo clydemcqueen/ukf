@@ -8,6 +8,15 @@ namespace ukf
   using namespace Eigen;
 
   //========================================================================
+  // Utility
+  //========================================================================
+
+  bool is_finite(const MatrixXd &m)
+  {
+    return m.array().isFinite().count() == m.rows() * m.cols();
+  }
+
+  //========================================================================
   // Unscented math
   //========================================================================
 
@@ -114,7 +123,12 @@ namespace ukf
     mean_z_fn_ = unscented_mean;
   }
 
-  void UnscentedKalmanFilter::predict(double dt, const MatrixXd &u)
+  bool UnscentedKalmanFilter::valid()
+  {
+    return is_finite(x_) && is_finite(P_);
+  }
+
+  bool UnscentedKalmanFilter::predict(double dt, const MatrixXd &u)
   {
     assert(f_fn_);
 
@@ -128,9 +142,11 @@ namespace ukf
 
     // Find mean and covariance of the predicted sigma points
     ukf::unscented_transform(r_x_fn_, mean_x_fn_, sigmas_p_, Wm_, Wc_, Q_, x_p_, P_p_);
+
+    return valid();
   }
 
-  void UnscentedKalmanFilter::update(const MatrixXd &z, const MatrixXd &R)
+  bool UnscentedKalmanFilter::update(const MatrixXd &z, const MatrixXd &R)
   {
     assert(h_fn_);
     assert(z.rows() == measurement_dim_ && z.cols() == 1);
@@ -162,6 +178,8 @@ namespace ukf
     MatrixXd y_z = r_z_fn_(z, x_z);
     x_ = x_p_ + K_ * y_z;
     P_ = P_p_ - K_ * P_z * K_.transpose();
+
+    return valid();
   }
 
 } // namespace ukf

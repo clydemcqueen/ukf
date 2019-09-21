@@ -129,9 +129,11 @@ namespace ukf
     void set_mean_z_fn(const UnscentedMeanFn &mean_z_fn)
     { mean_z_fn_ = mean_z_fn; }
 
-    void predict(double dt, const MatrixXd &u);
+    bool valid();
 
-    void update(const MatrixXd &z, const MatrixXd &R);
+    bool predict(double dt, const MatrixXd &u);
+
+    bool update(const MatrixXd &z, const MatrixXd &R);
   };
 
 } // namespace ukf

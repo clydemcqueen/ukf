@@ -178,8 +178,10 @@ void test_simple_filter()
 
   int num_i = 100;
   for (int i = 0; i < num_i; ++i) {
-    filter.predict(0.1, u);
-    filter.update(z, R);
+    if (!filter.predict(0.1, u) || !filter.update(z, R)) {
+      std::cout << "INVALID" << std::endl;
+      return;
+    }
   }
 
   assert(filter.x().rows() == state_dim && filter.x().cols() == 1);
@@ -281,8 +283,10 @@ void test_1d_drag_filter(bool use_control, std::string filename)
     z(0, 0) = actual_x + distribution(generator);
 
     // Predict and update
-    filter.predict(dt, u);
-    filter.update(z, R);
+    if (!filter.predict(dt, u) || !filter.update(z, R)) {
+      std::cout << "INVALID" << std::endl;
+      return;
+    }
 
     // Write to file
     auto x = filter.x();
@@ -438,8 +442,11 @@ void test_angle_filter()
     z(0, 0) = norm_angle(actual_y + distribution(generator));
 
     // Predict and update
-    filter.predict(dt, u);
-    filter.update(z, R);
+    // Predict and update
+    if (!filter.predict(dt, u) || !filter.update(z, R)) {
+      std::cout << "INVALID" << std::endl;
+      return;
+    }
 
     // Write to file
     auto x = filter.x();
