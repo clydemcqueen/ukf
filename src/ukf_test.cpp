@@ -62,7 +62,7 @@ void test_generate_sigmas()
     MatrixXd P = MatrixXd::Identity(state_dim, state_dim);
 
     // Make sure the sizes are correct
-    ukf::UnscentedKalmanFilter filter(state_dim, measurement_dim, alpha, beta, kappa);
+    ukf::UnscentedKalmanFilter filter(state_dim, alpha, beta, kappa);
     filter.set_x(x);
     filter.set_P(P);
 
@@ -102,7 +102,7 @@ void test_unscented_transform()
     MatrixXd Q = MatrixXd::Zero(state_dim, state_dim); // Zero process noise, just for this test
 
     // Make sure the sizes are correct
-    ukf::UnscentedKalmanFilter filter(state_dim, measurement_dim, alpha, beta, kappa);
+    ukf::UnscentedKalmanFilter filter(state_dim, alpha, beta, kappa);
     filter.set_x(x);
     filter.set_P(P);
     filter.set_Q(Q);
@@ -139,7 +139,7 @@ void test_simple_filter()
   int measurement_dim{2};
   int control_dim{0};
 
-  ukf::UnscentedKalmanFilter filter(state_dim, measurement_dim, 0.1, 2.0, 0);
+  ukf::UnscentedKalmanFilter filter(state_dim, 0.1, 2.0, 0);
   filter.set_x(MatrixXd::Zero(state_dim, 1));
   filter.set_P(MatrixXd::Identity(state_dim, state_dim));
 
@@ -213,7 +213,7 @@ void test_1d_drag_filter(bool use_control, std::string filename)
   double dt = 1.0;
   double z_stddev = 1.0;
 
-  ukf::UnscentedKalmanFilter filter(state_dim, measurement_dim, 0.3, 2.0, 0);
+  ukf::UnscentedKalmanFilter filter(state_dim, 0.3, 2.0, 0);
   filter.set_x(MatrixXd::Zero(state_dim, 1));
   filter.set_P(MatrixXd::Identity(state_dim, state_dim));
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * 0.05);
@@ -334,7 +334,7 @@ void test_angle_filter()
   double dt = 0.1;
   double z_stddev = 0.5;
 
-  ukf::UnscentedKalmanFilter filter(state_dim, measurement_dim, 0.3, 2.0, 0);
+  ukf::UnscentedKalmanFilter filter(state_dim, 0.3, 2.0, 0);
   filter.set_x(MatrixXd::Zero(state_dim, 1));
   filter.set_P(MatrixXd::Identity(state_dim, state_dim));
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * 0.01);

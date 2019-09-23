@@ -43,9 +43,7 @@ namespace ukf
   class UnscentedKalmanFilter
   {
     // Inputs
-    // The filter doesn't care about the dimensionality of u, so there's no control_dim
     int state_dim_;             // Size of state space
-    int measurement_dim_;       // Size of measurement space
     MatrixXd Q_;                // Process covariance
 
     // Additional inputs: constants for generating Merwe sigma points
@@ -79,7 +77,7 @@ namespace ukf
 
   public:
 
-    explicit UnscentedKalmanFilter(int state_dim, int measurement_dim, double alpha, double beta, int kappa);
+    explicit UnscentedKalmanFilter(int state_dim, double alpha, double beta, int kappa);
 
     ~UnscentedKalmanFilter()
     {}

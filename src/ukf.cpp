@@ -93,16 +93,13 @@ namespace ukf
   // UnscentedKalmanFilter
   //========================================================================
 
-  UnscentedKalmanFilter::UnscentedKalmanFilter(int state_dim, int measurement_dim,
-                                               double alpha, double beta, int kappa) :
+  UnscentedKalmanFilter::UnscentedKalmanFilter(int state_dim, double alpha, double beta, int kappa) :
     state_dim_{state_dim},
-    measurement_dim_{measurement_dim},
     alpha_{alpha},
     beta_{beta},
     kappa_{kappa}
   {
     assert(state_dim > 0);
-    assert(measurement_dim > 0);
 
     x_ = MatrixXd::Zero(state_dim, 1);
     P_ = MatrixXd::Identity(state_dim, state_dim);
@@ -125,7 +122,20 @@ namespace ukf
 
   bool UnscentedKalmanFilter::valid()
   {
-    return is_finite(x_) && is_finite(P_);
+    assert(x_.rows() == state_dim_ && x_.cols() == 1);
+    assert(P_.rows() == state_dim_ && P_.cols() == state_dim_);
+
+    if (!is_finite(x_)) {
+      std::cout << "x is not finite: " << std::endl << x_ << std::endl;
+      return false;
+    }
+
+    if (!is_finite(P_)) {
+      std::cout << "P is not finite: " << std::endl << P_ << std::endl;
+      return false;
+    }
+
+    return true;
   }
 
   bool UnscentedKalmanFilter::predict(double dt, const MatrixXd &u)
@@ -148,12 +158,14 @@ namespace ukf
 
   bool UnscentedKalmanFilter::update(const MatrixXd &z, const MatrixXd &R)
   {
+    int measurement_dim = z.rows();
+
     assert(h_fn_);
-    assert(z.rows() == measurement_dim_ && z.cols() == 1);
-    assert(R.rows() == measurement_dim_ && R.cols() == measurement_dim_);
+    assert(z.rows() > 0 && z.cols() == 1);
+    assert(R.rows() == measurement_dim && R.cols() == measurement_dim);
 
     // Transform sigma points into measurement space
-    MatrixXd sigmas_z(measurement_dim_, sigmas_p_.cols());
+    MatrixXd sigmas_z(measurement_dim, sigmas_p_.cols());
     for (int i = 0; i < sigmas_p_.cols(); ++i) {
       h_fn_(sigmas_p_.col(i), sigmas_z.col(i));
     }
@@ -164,7 +176,7 @@ namespace ukf
     ukf::unscented_transform(r_z_fn_, mean_z_fn_, sigmas_z, Wm_, Wc_, R, x_z, P_z);
 
     // Find cross covariance of the sigma points in the state and measurement spaces
-    MatrixXd P_xz = MatrixXd::Zero(state_dim_, measurement_dim_);
+    MatrixXd P_xz = MatrixXd::Zero(state_dim_, measurement_dim);
     for (int i = 0; i < sigmas_z.cols(); ++i) {
       MatrixXd y_p = r_x_fn_(sigmas_p_.col(i), x_p_);
       MatrixXd y_z = r_z_fn_(sigmas_z.col(i), x_z);
@@ -173,6 +185,8 @@ namespace ukf
 
     // Kalman gain
     K_ = P_xz * P_z.inverse();
+    // assert(K_.rows() == state_dim_);
+    // assert(K_.cols() == measurement_dim_);
 
     // Combine measurement and prediction into a new estimate
     MatrixXd y_z = r_z_fn_(z, x_z);
