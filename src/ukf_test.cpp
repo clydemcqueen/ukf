@@ -53,7 +53,7 @@ void test_generate_sigmas()
   std::cout << "\n========= GENERATE SIGMA POINTS =========\n" << std::endl;
 
   double alpha{0.1}, beta{2.0};
-  int measurement_dim{1}, kappa{0};
+  int kappa{0};
 
   for (int state_dim = 1; state_dim < 5; ++state_dim) {
     std::cout << state_dim << " dimension(s):" << std::endl;
@@ -88,7 +88,6 @@ void test_unscented_transform()
 
   double alpha{0.3}, beta{2};
   int kappa{0};
-  int measurement_dim{1};
   ukf::ResidualFn residual_x = [](const MatrixXd &x, const MatrixXd &mean) -> MatrixXd
   {
     return x - mean;

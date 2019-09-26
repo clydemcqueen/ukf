@@ -54,6 +54,13 @@ namespace ukf
     }
   }
 
+  // Simple residual function
+  // Not useful for angles
+  MatrixXd residual(const Ref<const MatrixXd> &x, const MatrixXd &mean)
+  {
+    return x - mean;
+  };
+
   // sum of { Wm[i] * f(sigma[i]) }
   // Not useful for angles
   MatrixXd unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm)
@@ -108,14 +115,8 @@ namespace ukf
     h_fn_ = nullptr;
 
     // The default residual and unscented mean functions are not useful for angles
-    r_x_fn_ = [](const Ref<const MatrixXd> &x, const MatrixXd &mean) -> MatrixXd
-    {
-      return x - mean;
-    };
-    r_z_fn_ = [](const Ref<const MatrixXd> &z, const MatrixXd &mean) -> MatrixXd
-    {
-      return z - mean;
-    };
+    r_x_fn_ = residual;
+    r_z_fn_ = residual;
     mean_x_fn_ = unscented_mean;
     mean_z_fn_ = unscented_mean;
   }

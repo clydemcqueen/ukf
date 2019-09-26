@@ -28,6 +28,8 @@ namespace ukf
   void merwe_sigmas(const int state_dim, const double alpha, const double beta, const int kappa,
                     const MatrixXd &x, const MatrixXd &P, MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc);
 
+  MatrixXd residual(const Ref<const MatrixXd> &x, const MatrixXd &mean);
+
   MatrixXd unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm);
 
   MatrixXd unscented_covariance(const ResidualFn &r_x_fn, const MatrixXd &sigma_points, const MatrixXd &Wc,
