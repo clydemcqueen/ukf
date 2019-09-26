@@ -139,8 +139,6 @@ void test_simple_filter()
   int control_dim{0};
 
   ukf::UnscentedKalmanFilter filter(state_dim, 0.1, 2.0, 0);
-  filter.set_x(MatrixXd::Zero(state_dim, 1));
-  filter.set_P(MatrixXd::Identity(state_dim, state_dim));
 
   // State transition function
   filter.set_f_fn([](const double dt, const MatrixXd &u, Ref<MatrixXd> x)
@@ -213,8 +211,6 @@ void test_1d_drag_filter(bool use_control, std::string filename)
   double z_stddev = 1.0;
 
   ukf::UnscentedKalmanFilter filter(state_dim, 0.3, 2.0, 0);
-  filter.set_x(MatrixXd::Zero(state_dim, 1));
-  filter.set_P(MatrixXd::Identity(state_dim, state_dim));
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * 0.05);
 
   // State transition function
@@ -334,8 +330,6 @@ void test_angle_filter()
   double z_stddev = 0.5;
 
   ukf::UnscentedKalmanFilter filter(state_dim, 0.3, 2.0, 0);
-  filter.set_x(MatrixXd::Zero(state_dim, 1));
-  filter.set_P(MatrixXd::Identity(state_dim, state_dim));
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * 0.01);
 
   // State transition function
@@ -475,6 +469,116 @@ void test_angle_filter()
   std::cout << "estimated P:" << std::endl << filter.P() << std::endl;
 }
 
+// Fuse 2 sensors, one measures 2 variables, the other measures 1
+void test_fusion()
+{
+  std::cout << "\n========= FUSION FILTER =========\n" << std::endl;
+
+  // State: [x, vx, ax, y, vy, zy]T
+  int state_dim{6};
+  int measure_2_dim{2};
+  int measure_1_dim{1};
+  int control_dim{0};
+
+  ukf::UnscentedKalmanFilter filter(state_dim, 0.1, 2.0, 0);
+  filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * 0.01);
+
+  // State transition function
+  auto f_fn = [](const double dt, const MatrixXd &u, Ref<MatrixXd> x)
+  {
+    // Ignore u
+    // ax and ay are discovered
+
+    // vx += ax * dt
+    x(1, 0) += x(2, 0) * dt;
+
+    // x += vx * dt
+    x(0, 0) += x(1, 0) * dt;
+
+    // vy += ay * dt
+    x(4, 0) += x(5, 0) * dt;
+
+    // y += vy * dt
+    x(3, 0) += x(4, 0) * dt;
+  };
+
+  filter.set_f_fn(f_fn);
+
+  // Measure 1 function
+  auto measure_1_fn = [](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
+  {
+    // x
+    z(0, 0) = x(0, 0);
+  };
+
+  // Measure 2 function
+  auto measure_2_fn = [](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
+  {
+    // x
+    z(0, 0) = x(0, 0);
+
+    // y
+    z(1, 0) = x(3, 0);
+  };
+
+  double z1_mean = -1;
+  double z2_mean = 1;
+  double z_stddev = 0.01;
+  double z_var = z_stddev * z_stddev;
+
+  MatrixXd z1 = MatrixXd::Zero(measure_1_dim, 1);
+  MatrixXd z2 = MatrixXd::Zero(measure_2_dim, 1);
+
+  MatrixXd R1 = MatrixXd::Identity(measure_1_dim, measure_1_dim) * z_var;
+  MatrixXd R2 = MatrixXd::Identity(measure_2_dim, measure_2_dim) * z_var;
+
+  MatrixXd u = MatrixXd::Zero(control_dim, 1);
+
+  // Add some noise
+  std::default_random_engine generator;
+  std::normal_distribution<double> distribution(0, z_stddev);
+
+  // Run a simulation
+  int num_i = 10000;
+  std::cout << "Running " << num_i << " iterations..." << std::endl;
+  for (int i = 0; i < num_i; ++i) {
+
+    // Predict
+    bool ok = filter.predict(0.1, u);
+
+    // Update
+    if (ok) {
+      // Alternate z1 and z2
+      if (i % 3) {
+        z1(0) = z1_mean + distribution(generator);
+        filter.set_h_fn(measure_1_fn);
+        ok = filter.update(z1, R1);
+      } else {
+        z2(0) = z2_mean + distribution(generator);
+        z2(1) = z2_mean + distribution(generator);
+        filter.set_h_fn(measure_2_fn);
+        ok = filter.update(z2, R2);
+      }
+    }
+
+    if (!ok) {
+      std::cout << "INVALID iteration " << i << std::endl;
+      std::cout << filter.x() << std::endl;
+      std::cout << filter.P() << std::endl;
+      return;
+    }
+
+    // TODO write out and graph
+    // TODO try different dts, so the measurements "beat" against each other
+  }
+
+  assert(filter.x().rows() == state_dim && filter.x().cols() == 1);
+  assert(filter.P().rows() == state_dim && filter.P().cols() == state_dim);
+
+  std::cout << "estimated x:" << std::endl << filter.x() << std::endl;
+  std::cout << "estimated P:" << std::endl << filter.P() << std::endl;
+}
+
 int main(int argc, char **argv)
 {
   test_cholesky();
@@ -484,5 +588,6 @@ int main(int argc, char **argv)
   test_1d_drag_filter(false, "ukf_1d_drag_discover_ax.txt");
   test_1d_drag_filter(true, "ukf_1d_drag_control_ax.txt");
   test_angle_filter();
+  test_fusion();
   return 0;
 }
