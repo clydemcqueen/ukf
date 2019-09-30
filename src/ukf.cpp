@@ -139,7 +139,7 @@ namespace ukf
     return true;
   }
 
-  bool UnscentedKalmanFilter::predict(double dt, const MatrixXd &u)
+  void UnscentedKalmanFilter::predict(double dt, const MatrixXd &u)
   {
     assert(f_fn_);
 
@@ -153,11 +153,9 @@ namespace ukf
 
     // Find mean and covariance of the predicted sigma points
     ukf::unscented_transform(r_x_fn_, mean_x_fn_, sigmas_p_, Wm_, Wc_, Q_, x_p_, P_p_);
-
-    return valid();
   }
 
-  bool UnscentedKalmanFilter::update(const MatrixXd &z, const MatrixXd &R)
+  void UnscentedKalmanFilter::update(const MatrixXd &z, const MatrixXd &R)
   {
     int measurement_dim = z.rows();
 
@@ -193,8 +191,6 @@ namespace ukf
     MatrixXd y_z = r_z_fn_(z, x_z);
     x_ = x_p_ + K_ * y_z;
     P_ = P_p_ - K_ * P_z * K_.transpose();
-
-    return valid();
   }
 
 } // namespace ukf

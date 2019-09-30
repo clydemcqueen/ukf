@@ -175,7 +175,9 @@ void test_simple_filter()
 
   int num_i = 100;
   for (int i = 0; i < num_i; ++i) {
-    if (!filter.predict(0.1, u) || !filter.update(z, R)) {
+    filter.predict(0.1, u);
+    filter.update(z, R);
+    if (!filter.valid()) {
       std::cout << "INVALID" << std::endl;
       return;
     }
@@ -278,7 +280,9 @@ void test_1d_drag_filter(bool use_control, std::string filename)
     z(0, 0) = actual_x + distribution(generator);
 
     // Predict and update
-    if (!filter.predict(dt, u) || !filter.update(z, R)) {
+    filter.predict(dt, u);
+    filter.update(z, R);
+    if (!filter.valid()) {
       std::cout << "INVALID" << std::endl;
       return;
     }
@@ -435,8 +439,9 @@ void test_angle_filter()
     z(0, 0) = norm_angle(actual_y + distribution(generator));
 
     // Predict and update
-    // Predict and update
-    if (!filter.predict(dt, u) || !filter.update(z, R)) {
+    filter.predict(dt, u);
+    filter.update(z, R);
+    if (!filter.valid()) {
       std::cout << "INVALID" << std::endl;
       return;
     }
@@ -544,24 +549,23 @@ void test_fusion()
   for (int i = 0; i < num_i; ++i) {
 
     // Predict
-    bool ok = filter.predict(0.1, u);
+    filter.predict(0.1, u);
 
     // Update
-    if (ok) {
-      // Alternate z1 and z2
-      if (i % 3) {
-        z1(0) = z1_mean + distribution(generator);
-        filter.set_h_fn(measure_1_fn);
-        ok = filter.update(z1, R1);
-      } else {
-        z2(0) = z2_mean + distribution(generator);
-        z2(1) = z2_mean + distribution(generator);
-        filter.set_h_fn(measure_2_fn);
-        ok = filter.update(z2, R2);
-      }
+    // Alternate z1 and z2
+    if (i % 3) {
+      z1(0) = z1_mean + distribution(generator);
+      filter.set_h_fn(measure_1_fn);
+      filter.update(z1, R1);
+    } else {
+      z2(0) = z2_mean + distribution(generator);
+      z2(1) = z2_mean + distribution(generator);
+      filter.set_h_fn(measure_2_fn);
+      filter.update(z2, R2);
     }
 
-    if (!ok) {
+
+    if (!filter.valid()) {
       std::cout << "INVALID iteration " << i << std::endl;
       std::cout << filter.x() << std::endl;
       std::cout << filter.P() << std::endl;

@@ -131,9 +131,9 @@ namespace ukf
 
     bool valid();
 
-    bool predict(double dt, const MatrixXd &u);
+    void predict(double dt, const MatrixXd &u);
 
-    bool update(const MatrixXd &z, const MatrixXd &R);
+    void update(const MatrixXd &z, const MatrixXd &R);
   };
 
 } // namespace ukf
