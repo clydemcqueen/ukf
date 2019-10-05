@@ -16,6 +16,36 @@ namespace ukf
     return m.array().isFinite().count() == m.rows() * m.cols();
   }
 
+  bool valid_x(const MatrixXd &x)
+  {
+    if (!is_finite(x)) {
+      std::cout << "x is not finite: " << std::endl << x << std::endl;
+      return false;
+    }
+
+    return true;
+  }
+
+  bool valid_P(const MatrixXd &P)
+  {
+    if (!is_finite(P)) {
+      std::cout << "P is not finite: " << std::endl << P << std::endl;
+      return false;
+    }
+
+    EigenSolver<MatrixXd> eigen_solver(P);
+    auto eigen_values = eigen_solver.eigenvalues();
+    for (int r = 0; r < eigen_values.rows(); ++r) {
+      auto eigen_value = eigen_values(r, 0);
+      if (eigen_value.real() < 0) {
+        std::cout << "negative eigenvalue for P: " << std::endl << P << std::endl;
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   //========================================================================
   // Unscented math
   //========================================================================
@@ -126,17 +156,7 @@ namespace ukf
     assert(x_.rows() == state_dim_ && x_.cols() == 1);
     assert(P_.rows() == state_dim_ && P_.cols() == state_dim_);
 
-    if (!is_finite(x_)) {
-      std::cout << "x is not finite: " << std::endl << x_ << std::endl;
-      return false;
-    }
-
-    if (!is_finite(P_)) {
-      std::cout << "P is not finite: " << std::endl << P_ << std::endl;
-      return false;
-    }
-
-    return true;
+    return valid_x(x_) && valid_P(P_);
   }
 
   void UnscentedKalmanFilter::predict(double dt, const MatrixXd &u)

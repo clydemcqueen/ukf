@@ -38,6 +38,10 @@ namespace ukf
   void unscented_transform(const ResidualFn &r_x_fn, const UnscentedMeanFn &mean_fn, const MatrixXd &sigma_points,
                            const MatrixXd &Wm, const MatrixXd &Wc, const MatrixXd &Q, MatrixXd &x, MatrixXd &P);
 
+  bool valid_x(const MatrixXd &x);
+
+  bool valid_P(const MatrixXd &P);
+
   //========================================================================
   // UnscentedKalmanFilter
   //========================================================================

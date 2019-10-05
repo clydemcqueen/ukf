@@ -33,6 +33,19 @@ bool allclose(const DenseBase<DerivedA> &a,
   return ((a.derived() - b.derived()).array().abs() <= (atol + rtol * b.derived().array().abs())).all();
 }
 
+void test_valid()
+{
+  std::cout << "\n========= VALID =========\n" << std::endl;
+
+  int state_dim = 2;
+  MatrixXd good_P = MatrixXd::Zero(2, 2);
+  MatrixXd bad_P = MatrixXd::Zero(2, 2);
+  good_P << 1, 0.1, 0.1, 2;
+  bad_P << 0, 1, -2, -3;
+  bool ok = ukf::valid_P(good_P) && !ukf::valid_P(bad_P);
+  std::cout << (ok ? "Valid OK" : "Valid FAIL") << std::endl;
+}
+
 void test_cholesky()
 {
   std::cout << "\n========= CHOLESKY =========\n" << std::endl;
@@ -585,6 +598,7 @@ void test_fusion()
 
 int main(int argc, char **argv)
 {
+  test_valid();
   test_cholesky();
   test_generate_sigmas();
   test_unscented_transform();
