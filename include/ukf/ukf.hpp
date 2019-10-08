@@ -33,10 +33,10 @@ namespace ukf
   MatrixXd unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm);
 
   MatrixXd unscented_covariance(const ResidualFn &r_x_fn, const MatrixXd &sigma_points, const MatrixXd &Wc,
-                                const MatrixXd &x, const MatrixXd &Q);
+                                const MatrixXd &x);
 
   void unscented_transform(const ResidualFn &r_x_fn, const UnscentedMeanFn &mean_fn, const MatrixXd &sigma_points,
-                           const MatrixXd &Wm, const MatrixXd &Wc, const MatrixXd &Q, MatrixXd &x, MatrixXd &P);
+                           const MatrixXd &Wm, const MatrixXd &Wc, MatrixXd &x, MatrixXd &P);
 
   bool valid_x(const MatrixXd &x);
 
@@ -65,8 +65,6 @@ namespace ukf
     MatrixXd sigmas_p_;         // Predicted sigma points = f(sigma_points)
     MatrixXd Wm_;               // Weights for computing mean
     MatrixXd Wc_;               // Weights for computing covariance
-    MatrixXd x_p_;              // Predicted mean
-    MatrixXd P_p_;              // Predicted covariance
 
     // State after the update step, for diagnostics
     MatrixXd K_;                // Kalman gain

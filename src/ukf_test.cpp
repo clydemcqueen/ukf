@@ -33,7 +33,7 @@ bool allclose(const DenseBase<DerivedA> &a,
   return ((a.derived() - b.derived()).array().abs() <= (atol + rtol * b.derived().array().abs())).all();
 }
 
-void test_valid()
+bool test_valid()
 {
   std::cout << "\n========= VALID =========\n" << std::endl;
 
@@ -44,9 +44,10 @@ void test_valid()
   bad_P << 0, 1, -2, -3;
   bool ok = ukf::valid_P(good_P) && !ukf::valid_P(bad_P);
   std::cout << (ok ? "Valid OK" : "Valid FAIL") << std::endl;
+  return ok;
 }
 
-void test_cholesky()
+bool test_cholesky()
 {
   std::cout << "\n========= CHOLESKY =========\n" << std::endl;
 
@@ -58,7 +59,9 @@ void test_cholesky()
 
   MatrixXd square = s * s.transpose();
 
-  std::cout << (allclose(t, square) ? "Cholesky OK" : "Cholesky FAIL") << std::endl;
+  bool ok = allclose(t, square);
+  std::cout << (ok ? "Cholesky OK" : "Cholesky FAIL") << std::endl;
+  return ok;
 }
 
 void test_generate_sigmas()
@@ -95,7 +98,7 @@ void test_generate_sigmas()
   }
 }
 
-void test_unscented_transform()
+bool test_unscented_transform()
 {
   std::cout << "\n========= UNSCENTED TRANSFORM =========\n" << std::endl;
 
@@ -132,17 +135,23 @@ void test_unscented_transform()
     // Compute mean of sigmas_p
     MatrixXd x_f = ukf::unscented_mean(sigmas_p, Wm);
     assert(x_f.rows() == x.rows() && x_f.cols() == 1);
-    std::cout << (allclose(x, x_f) ? "mean OK" : "mean FAIL") << std::endl;
+    bool ok = allclose(x, x_f);
+    std::cout << (ok ? "mean OK" : "mean FAIL") << std::endl;
+    if (!ok) return false;
 
     // Compute covariance of sigmas_p
-    MatrixXd P_f = ukf::unscented_covariance(residual_x, sigmas_p, Wc, x_f, Q);
+    MatrixXd P_f = ukf::unscented_covariance(residual_x, sigmas_p, Wc, x_f) + Q;
     assert(P_f.rows() == P.rows() && P_f.cols() == P.cols());
-    std::cout << (allclose(P, P_f) ? "covar OK" : "covar FAIL") << std::endl;
+    ok = allclose(P, P_f);
+    std::cout << (ok ? "covar OK" : "covar FAIL") << std::endl;
+    if (!ok) return false;
   }
+
+  return true;
 }
 
 // Simple Newtonian filter with 2 DoF
-void test_simple_filter()
+bool test_simple_filter()
 {
   std::cout << "\n========= FILTER =========\n" << std::endl;
 
@@ -191,8 +200,8 @@ void test_simple_filter()
     filter.predict(0.1, u);
     filter.update(z, R);
     if (!filter.valid()) {
-      std::cout << "INVALID" << std::endl;
-      return;
+      std::cout << "INVALID iteration " << i << std::endl;
+      return false;
     }
   }
 
@@ -202,6 +211,8 @@ void test_simple_filter()
   std::cout << num_i << " iterations" << std::endl;
   std::cout << "estimated x:" << std::endl << filter.x() << std::endl;
   std::cout << "estimated P:" << std::endl << filter.P() << std::endl;
+
+  return true;
 }
 
 // Implement a filter with drag using one of 2 strategies:
@@ -211,7 +222,7 @@ void test_simple_filter()
 //
 // In tests the control strategy produces better results.
 // The drag constant is a function of the drag coefficient, surface area and mass, and must be known in advance.
-void test_1d_drag_filter(bool use_control, std::string filename)
+bool test_1d_drag_filter(bool use_control, std::string filename)
 {
   std::cout << "\n========= 1D DRAG FILTER " << use_control << " =========\n" << std::endl;
 
@@ -296,8 +307,8 @@ void test_1d_drag_filter(bool use_control, std::string filename)
     filter.predict(dt, u);
     filter.update(z, R);
     if (!filter.valid()) {
-      std::cout << "INVALID" << std::endl;
-      return;
+      std::cout << "INVALID iteration " << i << std::endl;
+      return false;
     }
 
     // Write to file
@@ -331,10 +342,24 @@ void test_1d_drag_filter(bool use_control, std::string filename)
   std::cout << num_i << " iterations" << std::endl;
   std::cout << "estimated x:" << std::endl << filter.x() << std::endl;
   std::cout << "estimated P:" << std::endl << filter.P() << std::endl;
+
+  return true;
+}
+
+template<typename T>
+constexpr T clamp(const T v, const T min, const T max)
+{
+  return v > max ? max : (v < min ? min : v);
+}
+
+template<typename T>
+constexpr T clamp(const T v, const T minmax)
+{
+  return clamp(v, -minmax, minmax);
 }
 
 // Simple filter with an angle, which requires custom residual and mean lambdas.
-void test_angle_filter()
+bool test_angle_filter(int iterations, bool update)
 {
   std::cout << "\n========= ANGLE FILTER =========\n" << std::endl;
 
@@ -435,6 +460,7 @@ void test_angle_filter()
   std::ofstream f;
   f.open("angle_filter.txt");
   f << "t, actual_y, actual_vy, actual.ay, z, x.y, x.vy, x.ay, K.y, K.vy, K.ay" << std::endl;
+  constexpr int PLOT_N = 200;
 
   // Initial state
   double actual_ay = 0.0;
@@ -446,33 +472,60 @@ void test_angle_filter()
   std::normal_distribution<double> distribution(0, z_stddev);
 
   // Run a simulation
-  int num_i = 100;
-  for (int i = 0; i < num_i; ++i) {
+  for (int i = 0; i < iterations; ++i) {
     // Measurement
     z(0, 0) = norm_angle(actual_y + distribution(generator));
 
     // Predict and update
     filter.predict(dt, u);
-    filter.update(z, R);
+    if (update) {
+      filter.update(z, R);
+    }
     if (!filter.valid()) {
-      std::cout << "INVALID" << std::endl;
-      return;
+      std::cout << "INVALID iteration " << i << std::endl;
+      return false;
     }
 
+    // If we're not calling update() the process noise will just keep adding to P.
+    // This is OK for scalar values, but not OK for angles: if the variance gets to ~2 radians
+    // the mean calculation will fail. Cap the covariance.
+    auto P = filter.P();
+    P(0, 0) = clamp(P(0, 0), 1.5);
+    P(0, 1) = clamp(P(0, 1), 2.0);
+    P(1, 0) = clamp(P(1, 0), 2.0);
+    P(1, 1) = clamp(P(1, 1), 3.0);
+    filter.set_P(P);
+
     // Write to file
-    auto x = filter.x();
-    auto K = filter.K();
-    f << i << ", "
-      << actual_y << ", "
-      << actual_vy << ", "
-      << actual_ay << ", "
-      << z << ", "
-      << x(0, 0) << ", "
-      << x(1, 0) << ", "
-      << 0 << ", "
-      << K(0, 0) << ", "
-      << K(1, 0) << ", "
-      << 0 << std::endl;
+    if (i + PLOT_N > iterations) {
+      auto x = filter.x();
+      if (update) {
+        auto K = filter.K();
+        f << i << ", "
+          << actual_y << ", "
+          << actual_vy << ", "
+          << actual_ay << ", "
+          << z << ", "
+          << x(0, 0) << ", "
+          << x(1, 0) << ", "
+          << 0 << ", "
+          << K(0, 0) << ", "
+          << K(1, 0) << ", "
+          << 0 << std::endl;
+      } else {
+        f << i << ", "
+          << actual_y << ", "
+          << actual_vy << ", "
+          << actual_ay << ", "
+          << z << ", "
+          << x(0, 0) << ", "
+          << x(1, 0) << ", "
+          << 0 << ", "
+          << 0 << ", "
+          << 0 << ", "
+          << 0 << std::endl;
+      }
+    }
 
     // Generate new z
     actual_vy += actual_ay * dt;
@@ -482,24 +535,32 @@ void test_angle_filter()
   assert(filter.x().rows() == state_dim && filter.x().cols() == 1);
   assert(filter.P().rows() == state_dim && filter.P().cols() == state_dim);
 
-  std::cout << num_i << " iterations" << std::endl;
+  std::cout << iterations << " iterations" << std::endl;
   std::cout << "estimated x:" << std::endl << filter.x() << std::endl;
   std::cout << "estimated P:" << std::endl << filter.P() << std::endl;
+
+  return true;
 }
 
 // Fuse 2 sensors, one measures 2 variables, the other measures 1
-void test_fusion()
+bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measure_1, bool measure_2, double q)
 {
   std::cout << "\n========= FUSION FILTER =========\n" << std::endl;
 
   // State: [x, vx, ax, y, vy, zy]T
+#define x_x x(0, 0)
+#define x_vx x(1, 0)
+#define x_ax x(2, 0)
+#define x_y x(3, 0)
+#define x_vy x(4, 0)
+#define x_ay x(5, 0)
   int state_dim{6};
   int measure_2_dim{2};
   int measure_1_dim{1};
   int control_dim{0};
 
   ukf::UnscentedKalmanFilter filter(state_dim, 0.1, 2.0, 0);
-  filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * 0.01);
+  filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * q);
 
   // State transition function
   auto f_fn = [](const double dt, const MatrixXd &u, Ref<MatrixXd> x)
@@ -508,85 +569,132 @@ void test_fusion()
     // ax and ay are discovered
 
     // vx += ax * dt
-    x(1, 0) += x(2, 0) * dt;
+    x_vx += x_ax * dt;
 
     // x += vx * dt
-    x(0, 0) += x(1, 0) * dt;
+    x_x += x_vx * dt;
 
     // vy += ay * dt
-    x(4, 0) += x(5, 0) * dt;
+    x_vy += x_ay * dt;
 
     // y += vy * dt
-    x(3, 0) += x(4, 0) * dt;
+    x_y += x_vy * dt;
   };
 
   filter.set_f_fn(f_fn);
 
-  // Measure 1 function
+  // Measure 1 function: measure x
   auto measure_1_fn = [](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
   {
     // x
-    z(0, 0) = x(0, 0);
+    z(0, 0) = x_x;
   };
 
-  // Measure 2 function
+  // Measure 2 function: measure x and y
   auto measure_2_fn = [](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
   {
     // x
-    z(0, 0) = x(0, 0);
+    z(0, 0) = x_x;
 
     // y
-    z(1, 0) = x(3, 0);
+    z(1, 0) = x_y;
   };
 
-  double z1_mean = -1;
-  double z2_mean = 1;
-  double z_stddev = 0.01;
-  double z_var = z_stddev * z_stddev;
+  double x_mean = 100;
+  double y_mean = 1000;
+  double z1_bias = -1;
+  double z2_bias = 1;
 
   MatrixXd z1 = MatrixXd::Zero(measure_1_dim, 1);
   MatrixXd z2 = MatrixXd::Zero(measure_2_dim, 1);
 
-  MatrixXd R1 = MatrixXd::Identity(measure_1_dim, measure_1_dim) * z_var;
-  MatrixXd R2 = MatrixXd::Identity(measure_2_dim, measure_2_dim) * z_var;
+  MatrixXd R1 = MatrixXd::Identity(measure_1_dim, measure_1_dim) * z_filter_s * z_filter_s;
+  MatrixXd R2 = MatrixXd::Identity(measure_2_dim, measure_2_dim) * z_filter_s * z_filter_s;
 
   MatrixXd u = MatrixXd::Zero(control_dim, 1);
 
   // Add some noise
   std::default_random_engine generator;
-  std::normal_distribution<double> distribution(0, z_stddev);
+  std::normal_distribution<double> distribution(0, z_data_s);
+
+  // Write state so we can use matplotlib later
+  std::ofstream f_x;
+  f_x.open("fusion_filter_x.txt");
+  f_x << "t, actual_x, actual_vx, actual.ax, z, x.x, x.vx, x.ax, K.x, K.vx, K.ax" << std::endl;
+  std::ofstream f_y;
+  f_y.open("fusion_filter_y.txt");
+  f_y << "t, actual_y, actual_vy, actual.ay, z, x.y, x.vy, x.ay, K.y, K.vy, K.ay" << std::endl;
+  constexpr int PLOT_N = 200;
 
   // Run a simulation
-  int num_i = 10000;
-  std::cout << "Running " << num_i << " iterations..." << std::endl;
-  for (int i = 0; i < num_i; ++i) {
+  std::cout << "Running " << iterations << " iterations " <<
+            ", measure_1 " << measure_1 << ", measure_2 " << measure_2 << std::endl;
+  for (int i = 0; i < iterations; ++i) {
 
     // Predict
     filter.predict(0.1, u);
 
     // Update
     // Alternate z1 and z2
+    double x_measured = 0;
+    double y_measured = 0;
     if (i % 3) {
-      z1(0) = z1_mean + distribution(generator);
-      filter.set_h_fn(measure_1_fn);
-      filter.update(z1, R1);
+      if (measure_1) {
+        x_measured = x_mean + z1_bias + distribution(generator);
+        z1(0) = x_measured;
+        // y wasn't measured
+        filter.set_h_fn(measure_1_fn);
+        filter.update(z1, R1);
+      }
     } else {
-      z2(0) = z2_mean + distribution(generator);
-      z2(1) = z2_mean + distribution(generator);
-      filter.set_h_fn(measure_2_fn);
-      filter.update(z2, R2);
+      if (measure_2) {
+        x_measured = x_mean + z2_bias + distribution(generator);
+        y_measured = y_mean + z2_bias + distribution(generator);
+        z2(0) = x_measured;
+        z2(1) = y_measured;
+        filter.set_h_fn(measure_2_fn);
+        filter.update(z2, R2);
+      }
     }
-
 
     if (!filter.valid()) {
       std::cout << "INVALID iteration " << i << std::endl;
       std::cout << filter.x() << std::endl;
       std::cout << filter.P() << std::endl;
-      return;
+      return false;
     }
 
-    // TODO write out and graph
-    // TODO try different dts, so the measurements "beat" against each other
+    // Plot the last n iterations
+    if (i + PLOT_N > iterations) {
+      // Write to file
+      auto x = filter.x();
+      // K isn't valid if we didn't run an update step
+      // auto K = filter.K();
+
+      f_x << i << ", "
+          << x_mean << ", "
+          << 0 << ", "
+          << 0 << ", "
+          << x_measured << ", "
+          << x_x << ", "
+          << x_vx << ", "
+          << x_ax << ", "
+          << 0 << ", "
+          << 0 << ", "
+          << 0 << std::endl;
+
+      f_y << i << ", "
+          << y_mean << ", "
+          << 0 << ", "
+          << 0 << ", "
+          << y_measured << ", "
+          << x_y << ", "
+          << x_vy << ", "
+          << x_ay << ", "
+          << 0 << ", "
+          << 0 << ", "
+          << 0 << std::endl;
+    }
   }
 
   assert(filter.x().rows() == state_dim && filter.x().cols() == 1);
@@ -594,18 +702,33 @@ void test_fusion()
 
   std::cout << "estimated x:" << std::endl << filter.x() << std::endl;
   std::cout << "estimated P:" << std::endl << filter.P() << std::endl;
+
+  return true;
 }
 
 int main(int argc, char **argv)
 {
-  test_valid();
-  test_cholesky();
   test_generate_sigmas();
-  test_unscented_transform();
-  test_simple_filter();
-  test_1d_drag_filter(false, "ukf_1d_drag_discover_ax.txt");
-  test_1d_drag_filter(true, "ukf_1d_drag_control_ax.txt");
-  test_angle_filter();
-  test_fusion();
-  return 0;
+
+  bool ok =
+    test_valid() &&
+    test_cholesky() &&
+    test_unscented_transform() &&
+    test_simple_filter() &&
+    test_1d_drag_filter(false, "ukf_1d_drag_discover_ax.txt") &&
+    test_1d_drag_filter(true, "ukf_1d_drag_control_ax.txt") &&
+    test_angle_filter(1000, true) &&
+    test_angle_filter(1000, false) &&
+    test_fusion(100, 0.1, 10.0, true, true, 1.0) &&
+    test_fusion(100, 0.1, 10.0, true, false, 1.0) &&
+    test_fusion(100, 0.1, 10.0, false, true, 1.0) &&
+    test_fusion(100, 0.1, 10.0, false, false, 1.0);
+
+  if (ok) {
+    std::cout << std::endl << "PASSED" << std::endl;
+  } else {
+    std::cout << std::endl << "FAILED" << std::endl;
+  }
+
+  return ok ? 0 : 1;
 }

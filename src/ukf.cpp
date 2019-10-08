@@ -104,9 +104,9 @@ namespace ukf
     return x;
   }
 
-  // sum of { Wc[i] * (f(sigma[i]) - mean) * (f(sigma[i]) - mean).T } + Q
+  // sum of { Wc[i] * (f(sigma[i]) - mean) * (f(sigma[i]) - mean).T }
   MatrixXd unscented_covariance(const ResidualFn &r_x_fn, const MatrixXd &sigma_points, const MatrixXd &Wc,
-                                const MatrixXd &x, const MatrixXd &Q)
+                                const MatrixXd &x)
   {
     MatrixXd P = MatrixXd::Zero(x.rows(), x.rows());
 
@@ -115,15 +115,18 @@ namespace ukf
       P += Wc(0, i) * (y * y.transpose());
     }
 
-    return P + Q;
+    // Caller must add Q (or R)
+    return P;
   }
 
   // Compute the unscented transform
   void unscented_transform(const ResidualFn &r_x_fn, const UnscentedMeanFn &mean_fn, const MatrixXd &sigma_points,
-                           const MatrixXd &Wm, const MatrixXd &Wc, const MatrixXd &Q, MatrixXd &x, MatrixXd &P)
+                           const MatrixXd &Wm, const MatrixXd &Wc, MatrixXd &x, MatrixXd &P)
   {
     x = mean_fn(sigma_points, Wm);
-    P = unscented_covariance(r_x_fn, sigma_points, Wc, x, Q);
+
+    // Caller must add Q (or R)
+    P = unscented_covariance(r_x_fn, sigma_points, Wc, x);
   }
 
   //========================================================================
@@ -172,7 +175,10 @@ namespace ukf
     }
 
     // Find mean and covariance of the predicted sigma points
-    ukf::unscented_transform(r_x_fn_, mean_x_fn_, sigmas_p_, Wm_, Wc_, Q_, x_p_, P_p_);
+    ukf::unscented_transform(r_x_fn_, mean_x_fn_, sigmas_p_, Wm_, Wc_, x_, P_);
+
+    // Add process noise to the covariance
+    P_ += Q_ * dt;
   }
 
   void UnscentedKalmanFilter::update(const MatrixXd &z, const MatrixXd &R)
@@ -190,14 +196,18 @@ namespace ukf
     }
 
     // Find mean and covariance of sigma points in measurement space
+    // Measurement noise is not dependent on dt
     MatrixXd x_z;
     MatrixXd P_z;
-    ukf::unscented_transform(r_z_fn_, mean_z_fn_, sigmas_z, Wm_, Wc_, R, x_z, P_z);
+    ukf::unscented_transform(r_z_fn_, mean_z_fn_, sigmas_z, Wm_, Wc_, x_z, P_z);
+
+    // Add measurement noise to the covariance
+    P_z += R;
 
     // Find cross covariance of the sigma points in the state and measurement spaces
     MatrixXd P_xz = MatrixXd::Zero(state_dim_, measurement_dim);
     for (int i = 0; i < sigmas_z.cols(); ++i) {
-      MatrixXd y_p = r_x_fn_(sigmas_p_.col(i), x_p_);
+      MatrixXd y_p = r_x_fn_(sigmas_p_.col(i), x_);
       MatrixXd y_z = r_z_fn_(sigmas_z.col(i), x_z);
       P_xz += Wc_(0, i) * (y_p * y_z.transpose());
     }
@@ -209,8 +219,8 @@ namespace ukf
 
     // Combine measurement and prediction into a new estimate
     MatrixXd y_z = r_z_fn_(z, x_z);
-    x_ = x_p_ + K_ * y_z;
-    P_ = P_p_ - K_ * P_z * K_.transpose();
+    x_ = x_ + K_ * y_z;
+    P_ = P_ - K_ * P_z * K_.transpose();
   }
 
 } // namespace ukf
