@@ -17,28 +17,28 @@ namespace ukf
   // Unscented math
   //========================================================================
 
-  typedef std::function<void(const double dt, const MatrixXd &u, Ref<MatrixXd> x)> TransitionFn;
-  typedef std::function<void(const Ref<const MatrixXd> x, Ref<MatrixXd> z)> MeasurementFn;
+  using TransitionFn = std::function<void(const double dt, const VectorXd &u, Ref<VectorXd> x)>;
+  using MeasurementFn = std::function<void(const Ref<const VectorXd> x, Ref<VectorXd> z)>;
 
-  typedef std::function<MatrixXd(const Ref<const MatrixXd> &m, const MatrixXd &mean)> ResidualFn;
-  typedef std::function<MatrixXd(const MatrixXd &sigma_points, const MatrixXd &Wm)> UnscentedMeanFn;
+  using ResidualFn = std::function<VectorXd(const Ref<const VectorXd> &m, const VectorXd &mean)>;
+  using UnscentedMeanFn = std::function<VectorXd(const MatrixXd &sigma_points, const RowVectorXd &Wm)>;
 
   void cholesky(const MatrixXd &in, MatrixXd &out);
 
   void merwe_sigmas(const int state_dim, const double alpha, const double beta, const int kappa,
-                    const MatrixXd &x, const MatrixXd &P, MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc);
+                    const MatrixXd &x, const MatrixXd &P, MatrixXd &sigma_points, RowVectorXd &Wm, RowVectorXd &Wc);
 
-  MatrixXd residual(const Ref<const MatrixXd> &x, const MatrixXd &mean);
+  VectorXd residual(const Ref<const VectorXd> &x, const VectorXd &mean);
 
-  MatrixXd unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm);
+  VectorXd unscented_mean(const MatrixXd &sigma_points, const RowVectorXd &Wm);
 
-  MatrixXd unscented_covariance(const ResidualFn &r_x_fn, const MatrixXd &sigma_points, const MatrixXd &Wc,
-                                const MatrixXd &x);
+  MatrixXd unscented_covariance(const ResidualFn &r_x_fn, const MatrixXd &sigma_points, const RowVectorXd &Wc,
+                                const VectorXd &x);
 
   void unscented_transform(const ResidualFn &r_x_fn, const UnscentedMeanFn &mean_fn, const MatrixXd &sigma_points,
-                           const MatrixXd &Wm, const MatrixXd &Wc, MatrixXd &x, MatrixXd &P);
+                           const RowVectorXd &Wm, const RowVectorXd &Wc, VectorXd &x, MatrixXd &P);
 
-  bool valid_x(const MatrixXd &x);
+  bool valid_x(const VectorXd &x);
 
   bool valid_P(const MatrixXd &P);
 
@@ -58,13 +58,13 @@ namespace ukf
     int kappa_;                 // κ=0 is a good default
 
     // Current state
-    MatrixXd x_;                // Mean
+    VectorXd x_;                // Mean
     MatrixXd P_;                // Covariance
 
     // State after the predict step
     MatrixXd sigmas_p_;         // Predicted sigma points = f(sigma_points)
-    MatrixXd Wm_;               // Weights for computing mean
-    MatrixXd Wc_;               // Weights for computing covariance
+    RowVectorXd Wm_;            // Weights for computing mean
+    RowVectorXd Wc_;            // Weights for computing covariance
 
     // State after the update step, for diagnostics
     MatrixXd K_;                // Kalman gain
@@ -95,7 +95,7 @@ namespace ukf
     const auto &K() const
     { return K_; }
 
-    void set_x(const MatrixXd &x)
+    void set_x(const VectorXd &x)
     {
       assert(x.rows() == state_dim_ && x.cols() == 1);
       x_ = x;
@@ -133,9 +133,9 @@ namespace ukf
 
     bool valid();
 
-    void predict(double dt, const MatrixXd &u);
+    void predict(double dt, const VectorXd &u);
 
-    void update(const MatrixXd &z, const MatrixXd &R);
+    void update(const VectorXd &z, const MatrixXd &R);
   };
 
 } // namespace ukf

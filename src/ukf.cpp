@@ -16,7 +16,7 @@ namespace ukf
     return m.array().isFinite().count() == m.rows() * m.cols();
   }
 
-  bool valid_x(const MatrixXd &x)
+  bool valid_x(const VectorXd &x)
   {
     if (!is_finite(x)) {
       std::cout << "x is not finite: " << std::endl << x << std::endl;
@@ -60,7 +60,7 @@ namespace ukf
   // Generate Merwe scaled sigma points
   void merwe_sigmas(const int state_dim, const double alpha, const double beta, const int kappa,
                     const MatrixXd &x, const MatrixXd &P,
-                    MatrixXd &sigma_points, MatrixXd &Wm, MatrixXd &Wc)
+                    MatrixXd &sigma_points, RowVectorXd &Wm, RowVectorXd &Wc)
   {
     int num_points = 2 * state_dim + 1;
     double lambda = alpha * alpha * (state_dim + kappa) - state_dim;
@@ -68,11 +68,11 @@ namespace ukf
     double Wc_0 = lambda / (state_dim + lambda) + 1 - alpha * alpha + beta;
     double v = 1. / (2. * (state_dim + lambda));
 
-    Wm = MatrixXd::Constant(1, num_points, v);
-    Wm(0, 0) = Wm_0;
+    Wm = RowVectorXd::Constant(num_points, v);
+    Wm(0) = Wm_0;
 
-    Wc = MatrixXd::Constant(1, num_points, v);
-    Wc(0, 0) = Wc_0;
+    Wc = RowVectorXd::Constant(num_points, v);
+    Wc(0) = Wc_0;
 
     sigma_points = MatrixXd::Zero(state_dim, num_points);
     MatrixXd U;
@@ -86,33 +86,33 @@ namespace ukf
 
   // Simple residual function
   // Not useful for angles
-  MatrixXd residual(const Ref<const MatrixXd> &x, const MatrixXd &mean)
+  VectorXd residual(const Ref<const VectorXd> &x, const VectorXd &mean)
   {
     return x - mean;
-  };
+  }
 
   // sum of { Wm[i] * f(sigma[i]) }
   // Not useful for angles
-  MatrixXd unscented_mean(const MatrixXd &sigma_points, const MatrixXd &Wm)
+  VectorXd unscented_mean(const MatrixXd &sigma_points, const RowVectorXd &Wm)
   {
-    MatrixXd x = MatrixXd::Zero(sigma_points.rows(), 1);
+    VectorXd x = VectorXd::Zero(sigma_points.rows());
 
     for (int i = 0; i < sigma_points.cols(); ++i) {
-      x += Wm(0, i) * sigma_points.col(i);
+      x += Wm(i) * sigma_points.col(i);
     }
 
     return x;
   }
 
   // sum of { Wc[i] * (f(sigma[i]) - mean) * (f(sigma[i]) - mean).T }
-  MatrixXd unscented_covariance(const ResidualFn &r_x_fn, const MatrixXd &sigma_points, const MatrixXd &Wc,
-                                const MatrixXd &x)
+  MatrixXd unscented_covariance(const ResidualFn &r_x_fn, const MatrixXd &sigma_points, const RowVectorXd &Wc,
+                                const VectorXd &x)
   {
     MatrixXd P = MatrixXd::Zero(x.rows(), x.rows());
 
     for (int i = 0; i < sigma_points.cols(); ++i) {
-      MatrixXd y = r_x_fn(sigma_points.col(i), x);
-      P += Wc(0, i) * (y * y.transpose());
+      VectorXd y = r_x_fn(sigma_points.col(i), x);
+      P += Wc(i) * (y * y.transpose());
     }
 
     // Caller must add Q (or R)
@@ -121,7 +121,7 @@ namespace ukf
 
   // Compute the unscented transform
   void unscented_transform(const ResidualFn &r_x_fn, const UnscentedMeanFn &mean_fn, const MatrixXd &sigma_points,
-                           const MatrixXd &Wm, const MatrixXd &Wc, MatrixXd &x, MatrixXd &P)
+                           const RowVectorXd &Wm, const RowVectorXd &Wc, VectorXd &x, MatrixXd &P)
   {
     x = mean_fn(sigma_points, Wm);
 
@@ -141,7 +141,7 @@ namespace ukf
   {
     assert(state_dim > 0);
 
-    x_ = MatrixXd::Zero(state_dim, 1);
+    x_ = VectorXd::Zero(state_dim);
     P_ = MatrixXd::Identity(state_dim, state_dim);
     Q_ = MatrixXd::Identity(state_dim, state_dim);
     f_fn_ = nullptr;
@@ -162,7 +162,7 @@ namespace ukf
     return valid_x(x_) && valid_P(P_);
   }
 
-  void UnscentedKalmanFilter::predict(double dt, const MatrixXd &u)
+  void UnscentedKalmanFilter::predict(double dt, const VectorXd &u)
   {
     assert(f_fn_);
 
@@ -181,7 +181,7 @@ namespace ukf
     P_ += Q_ * dt;
   }
 
-  void UnscentedKalmanFilter::update(const MatrixXd &z, const MatrixXd &R)
+  void UnscentedKalmanFilter::update(const VectorXd &z, const MatrixXd &R)
   {
     int measurement_dim = z.rows();
 
@@ -197,7 +197,7 @@ namespace ukf
 
     // Find mean and covariance of sigma points in measurement space
     // Measurement noise is not dependent on dt
-    MatrixXd x_z;
+    VectorXd x_z;
     MatrixXd P_z;
     ukf::unscented_transform(r_z_fn_, mean_z_fn_, sigmas_z, Wm_, Wc_, x_z, P_z);
 
@@ -207,9 +207,9 @@ namespace ukf
     // Find cross covariance of the sigma points in the state and measurement spaces
     MatrixXd P_xz = MatrixXd::Zero(state_dim_, measurement_dim);
     for (int i = 0; i < sigmas_z.cols(); ++i) {
-      MatrixXd y_p = r_x_fn_(sigmas_p_.col(i), x_);
-      MatrixXd y_z = r_z_fn_(sigmas_z.col(i), x_z);
-      P_xz += Wc_(0, i) * (y_p * y_z.transpose());
+      VectorXd y_p = r_x_fn_(sigmas_p_.col(i), x_);
+      VectorXd y_z = r_z_fn_(sigmas_z.col(i), x_z);
+      P_xz += Wc_(i) * (y_p * y_z.transpose());
     }
 
     // Kalman gain

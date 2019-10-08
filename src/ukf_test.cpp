@@ -37,7 +37,6 @@ bool test_valid()
 {
   std::cout << "\n========= VALID =========\n" << std::endl;
 
-  int state_dim = 2;
   MatrixXd good_P = MatrixXd::Zero(2, 2);
   MatrixXd bad_P = MatrixXd::Zero(2, 2);
   good_P << 1, 0.1, 0.1, 2;
@@ -74,16 +73,16 @@ void test_generate_sigmas()
   for (int state_dim = 1; state_dim < 5; ++state_dim) {
     std::cout << state_dim << " dimension(s):" << std::endl;
 
-    MatrixXd x = MatrixXd::Zero(state_dim, 1);
-    MatrixXd P = MatrixXd::Identity(state_dim, state_dim);
+    auto x = VectorXd::Zero(state_dim, 1);
+    auto P = MatrixXd::Identity(state_dim, state_dim);
 
     // Make sure the sizes are correct
     ukf::UnscentedKalmanFilter filter(state_dim, alpha, beta, kappa);
     filter.set_x(x);
     filter.set_P(P);
 
-    MatrixXd Wm;
-    MatrixXd Wc;
+    RowVectorXd Wm;
+    RowVectorXd Wc;
     MatrixXd sigmas;
 
     ukf::merwe_sigmas(state_dim, alpha, beta, kappa, x, P, sigmas, Wm, Wc);
@@ -104,7 +103,7 @@ bool test_unscented_transform()
 
   double alpha{0.3}, beta{2};
   int kappa{0};
-  ukf::ResidualFn residual_x = [](const MatrixXd &x, const MatrixXd &mean) -> MatrixXd
+  ukf::ResidualFn residual_x = [](const VectorXd &x, const VectorXd &mean) -> VectorXd
   {
     return x - mean;
   };
@@ -112,7 +111,7 @@ bool test_unscented_transform()
   for (int state_dim = 1; state_dim < 10; ++state_dim) {
     std::cout << state_dim << " dimension(s):" << std::endl;
 
-    MatrixXd x = MatrixXd::Zero(state_dim, 1);
+    VectorXd x = VectorXd::Zero(state_dim);
     MatrixXd P = MatrixXd::Identity(state_dim, state_dim);
     MatrixXd Q = MatrixXd::Zero(state_dim, state_dim); // Zero process noise, just for this test
 
@@ -122,8 +121,8 @@ bool test_unscented_transform()
     filter.set_P(P);
     filter.set_Q(Q);
 
-    MatrixXd Wm;
-    MatrixXd Wc;
+    RowVectorXd Wm;
+    RowVectorXd Wc;
     MatrixXd sigmas;
 
     // Generate sigma points
@@ -133,7 +132,7 @@ bool test_unscented_transform()
     MatrixXd sigmas_p = sigmas;
 
     // Compute mean of sigmas_p
-    MatrixXd x_f = ukf::unscented_mean(sigmas_p, Wm);
+    VectorXd x_f = ukf::unscented_mean(sigmas_p, Wm);
     assert(x_f.rows() == x.rows() && x_f.cols() == 1);
     bool ok = allclose(x, x_f);
     std::cout << (ok ? "mean OK" : "mean FAIL") << std::endl;
@@ -163,37 +162,37 @@ bool test_simple_filter()
   ukf::UnscentedKalmanFilter filter(state_dim, 0.1, 2.0, 0);
 
   // State transition function
-  filter.set_f_fn([](const double dt, const MatrixXd &u, Ref<MatrixXd> x)
+  filter.set_f_fn([](const double dt, const VectorXd &u, Ref<VectorXd> x)
                   {
                     // Ignore u
                     // ax and ay are discovered
 
                     // vx += ax * dt
-                    x(1, 0) += x(2, 0) * dt;
+                    x(1) += x(2) * dt;
 
                     // x += vx * dt
-                    x(0, 0) += x(1, 0) * dt;
+                    x(0) += x(1) * dt;
 
                     // vy += ay * dt
-                    x(4, 0) += x(5, 0) * dt;
+                    x(4) += x(5) * dt;
 
                     // y += vy * dt
-                    x(3, 0) += x(4, 0) * dt;
+                    x(3) += x(4) * dt;
                   });
 
   // Measurement function
-  filter.set_h_fn([](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
+  filter.set_h_fn([](const Ref<const VectorXd> &x, Ref<VectorXd> z)
                   {
                     // x
-                    z(0, 0) = x(0, 0);
+                    z(0) = x(0);
 
                     // y
-                    z(1, 0) = x(3, 0);
+                    z(1) = x(3);
                   });
 
-  MatrixXd z = MatrixXd::Zero(measurement_dim, 1);
+  VectorXd z = VectorXd::Zero(measurement_dim);
   MatrixXd R = MatrixXd::Identity(measurement_dim, measurement_dim);
-  MatrixXd u = MatrixXd::Zero(control_dim, 1);
+  VectorXd u = VectorXd::Zero(control_dim);
 
   int num_i = 100;
   for (int i = 0; i < num_i; ++i) {
@@ -241,44 +240,44 @@ bool test_1d_drag_filter(bool use_control, std::string filename)
 
   // State transition function
   if (use_control) {
-    filter.set_f_fn([drag_constant](const double dt, const MatrixXd &u, Ref<MatrixXd> x)
+    filter.set_f_fn([drag_constant](const double dt, const VectorXd &u, Ref<VectorXd> x)
                     {
                       // ax = thrust_ax - vx * vx * drag_constant
-                      double ax = u(0, 0) - x(1, 0) * x(1, 0) * drag_constant;
+                      double ax = u(0, 0) - x(1) * x(1) * drag_constant;
 
                       // vx += ax * dt
-                      x(1, 0) += ax * dt;
+                      x(1) += ax * dt;
 
                       // x += vx * dt
-                      x(0, 0) += x(1, 0) * dt;
+                      x(0) += x(1) * dt;
                     });
   } else {
-    filter.set_f_fn([](const double dt, const MatrixXd &u, Ref<MatrixXd> x)
+    filter.set_f_fn([](const double dt, const VectorXd &u, Ref<VectorXd> x)
                     {
                       // Ignore u
                       // ax is discovered, drag is hidden inside ax
 
                       // vx += ax * dt
-                      x(1, 0) += x(2, 0) * dt;
+                      x(1) += x(2) * dt;
 
                       // x += vx * dt
-                      x(0, 0) += x(1, 0) * dt;
+                      x(0) += x(1) * dt;
                     });
   }
 
   // Measurement function
-  filter.set_h_fn([](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
+  filter.set_h_fn([](const Ref<const VectorXd> &x, Ref<VectorXd> z)
                   {
                     // x
-                    z(0, 0) = x(0, 0);
+                    z(0) = x(0);
                   });
 
-  MatrixXd z = MatrixXd::Zero(measurement_dim, 1);
+  VectorXd z = VectorXd::Zero(measurement_dim);
   MatrixXd R = MatrixXd::Identity(measurement_dim, measurement_dim) * z_stddev;
 
   // Thruster is always on and generates a constant force
   double thrust_ax = target_vx * target_vx * drag_constant;
-  MatrixXd u = MatrixXd::Zero(control_dim, 1);
+  VectorXd u = VectorXd::Zero(control_dim);
   if (use_control) {
     u(0, 0) = thrust_ax;
   }
@@ -301,7 +300,7 @@ bool test_1d_drag_filter(bool use_control, std::string filename)
   int num_i = 40;
   for (int i = 0; i < num_i; ++i) {
     // Measurement
-    z(0, 0) = actual_x + distribution(generator);
+    z(0) = actual_x + distribution(generator);
 
     // Predict and update
     filter.predict(dt, u);
@@ -314,15 +313,15 @@ bool test_1d_drag_filter(bool use_control, std::string filename)
     // Write to file
     auto x = filter.x();
     auto K = filter.K();
-    double ax = use_control ? 0 : x(2, 0);
+    double ax = use_control ? 0 : x(2);
     double Ka = use_control ? 0 : K(2, 0);
     f << i << ", "
       << actual_x << ", "
       << actual_vx << ", "
       << actual_ax << ", "
       << z << ", "
-      << x(0, 0) << ", "
-      << x(1, 0) << ", "
+      << x(0) << ", "
+      << x(1) << ", "
       << ax << ", "
       << K(0, 0) << ", "
       << K(1, 0) << ", "
@@ -375,34 +374,34 @@ bool test_angle_filter(int iterations, bool update)
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * 0.01);
 
   // State transition function
-  filter.set_f_fn([](const double dt, const MatrixXd &u, Ref<MatrixXd> x)
+  filter.set_f_fn([](const double dt, const VectorXd &u, Ref<VectorXd> x)
                   {
                     // Ignore u
                     // vy is discovered
 
                     // y += vy * dt
-                    x(0, 0) = norm_angle(x(0, 0) + x(1, 0) * dt);
+                    x(0) = norm_angle(x(0) + x(1) * dt);
                   });
 
   // Measurement function
-  filter.set_h_fn([](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
+  filter.set_h_fn([](const Ref<const VectorXd> &x, Ref<VectorXd> z)
                   {
                     // y
-                    z(0, 0) = x(0, 0);
+                    z(0) = x(0);
                   });
 
   // Residual x function
-  filter.set_r_x_fn([](const Ref<const MatrixXd> &x, const MatrixXd &mean) -> MatrixXd
+  filter.set_r_x_fn([](const Ref<const VectorXd> &x, const VectorXd &mean) -> VectorXd
                     {
-                      MatrixXd residual = x - mean;
+                      VectorXd residual = x - mean;
                       residual(0, 0) = norm_angle(residual(0, 0));
                       return residual;
                     });
 
   // Residual z function
-  filter.set_r_z_fn([](const Ref<const MatrixXd> &z, const MatrixXd &mean) -> MatrixXd
+  filter.set_r_z_fn([](const Ref<const MatrixXd> &z, const VectorXd &mean) -> VectorXd
                     {
-                      MatrixXd residual = z - mean;
+                      VectorXd residual = z - mean;
                       residual(0, 0) = norm_angle(residual(0, 0));
                       return residual;
                     });
@@ -411,9 +410,9 @@ bool test_angle_filter(int iterations, bool update)
   // See https://en.wikipedia.org/wiki/Mean_of_circular_quantities for one idea.
 
   // Unscented mean x function
-  filter.set_mean_x_fn([](const MatrixXd &sigma_points, const MatrixXd &Wm) -> MatrixXd
+  filter.set_mean_x_fn([](const MatrixXd &sigma_points, const RowVectorXd &Wm) -> VectorXd
                        {
-                         MatrixXd mean = MatrixXd::Zero(sigma_points.rows(), 1);
+                         VectorXd mean = MatrixXd::Zero(sigma_points.rows(), 1);
 
                          assert(mean.rows() == 2);
 
@@ -433,9 +432,9 @@ bool test_angle_filter(int iterations, bool update)
                        });
 
   // Unscented mean z function
-  filter.set_mean_z_fn([](const MatrixXd &sigma_points, const MatrixXd &Wm) -> MatrixXd
+  filter.set_mean_z_fn([](const MatrixXd &sigma_points, const RowVectorXd &Wm) -> VectorXd
                        {
-                         MatrixXd mean = MatrixXd::Zero(sigma_points.rows(), 1);
+                         VectorXd mean = VectorXd::Zero(sigma_points.rows());
 
                          assert(mean.rows() == 1);
 
@@ -452,9 +451,9 @@ bool test_angle_filter(int iterations, bool update)
                          return mean;
                        });
 
-  MatrixXd z = MatrixXd::Zero(measurement_dim, 1);
+  VectorXd z = VectorXd::Zero(measurement_dim);
   MatrixXd R = MatrixXd::Identity(measurement_dim, measurement_dim) * z_stddev;
-  MatrixXd u = MatrixXd::Zero(control_dim, 1);
+  VectorXd u = VectorXd::Zero(control_dim);
 
   // Write state so we can use matplotlib later
   std::ofstream f;
@@ -474,7 +473,7 @@ bool test_angle_filter(int iterations, bool update)
   // Run a simulation
   for (int i = 0; i < iterations; ++i) {
     // Measurement
-    z(0, 0) = norm_angle(actual_y + distribution(generator));
+    z(0) = norm_angle(actual_y + distribution(generator));
 
     // Predict and update
     filter.predict(dt, u);
@@ -489,7 +488,7 @@ bool test_angle_filter(int iterations, bool update)
     // If we're not calling update() the process noise will just keep adding to P.
     // This is OK for scalar values, but not OK for angles: if the variance gets to ~2 radians
     // the mean calculation will fail. Cap the covariance.
-    auto P = filter.P();
+    MatrixXd P = filter.P();
     P(0, 0) = clamp(P(0, 0), 1.5);
     P(0, 1) = clamp(P(0, 1), 2.0);
     P(1, 0) = clamp(P(1, 0), 2.0);
@@ -506,8 +505,8 @@ bool test_angle_filter(int iterations, bool update)
           << actual_vy << ", "
           << actual_ay << ", "
           << z << ", "
-          << x(0, 0) << ", "
-          << x(1, 0) << ", "
+          << x(0) << ", "
+          << x(1) << ", "
           << 0 << ", "
           << K(0, 0) << ", "
           << K(1, 0) << ", "
@@ -518,8 +517,8 @@ bool test_angle_filter(int iterations, bool update)
           << actual_vy << ", "
           << actual_ay << ", "
           << z << ", "
-          << x(0, 0) << ", "
-          << x(1, 0) << ", "
+          << x(0) << ", "
+          << x(1) << ", "
           << 0 << ", "
           << 0 << ", "
           << 0 << ", "
@@ -548,12 +547,12 @@ bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measur
   std::cout << "\n========= FUSION FILTER =========\n" << std::endl;
 
   // State: [x, vx, ax, y, vy, zy]T
-#define x_x x(0, 0)
-#define x_vx x(1, 0)
-#define x_ax x(2, 0)
-#define x_y x(3, 0)
-#define x_vy x(4, 0)
-#define x_ay x(5, 0)
+#define x_x x(0)
+#define x_vx x(1)
+#define x_ax x(2)
+#define x_y x(3)
+#define x_vy x(4)
+#define x_ay x(5)
   int state_dim{6};
   int measure_2_dim{2};
   int measure_1_dim{1};
@@ -563,7 +562,7 @@ bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measur
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * q);
 
   // State transition function
-  auto f_fn = [](const double dt, const MatrixXd &u, Ref<MatrixXd> x)
+  auto f_fn = [](const double dt, const VectorXd &u, Ref<VectorXd> x)
   {
     // Ignore u
     // ax and ay are discovered
@@ -584,20 +583,20 @@ bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measur
   filter.set_f_fn(f_fn);
 
   // Measure 1 function: measure x
-  auto measure_1_fn = [](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
+  auto measure_1_fn = [](const Ref<const VectorXd> &x, Ref<VectorXd> z)
   {
     // x
-    z(0, 0) = x_x;
+    z(0) = x_x;
   };
 
   // Measure 2 function: measure x and y
-  auto measure_2_fn = [](const Ref<const MatrixXd> &x, Ref<MatrixXd> z)
+  auto measure_2_fn = [](const Ref<const VectorXd> &x, Ref<VectorXd> z)
   {
     // x
-    z(0, 0) = x_x;
+    z(0) = x_x;
 
     // y
-    z(1, 0) = x_y;
+    z(1) = x_y;
   };
 
   double x_mean = 100;
@@ -605,13 +604,13 @@ bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measur
   double z1_bias = -1;
   double z2_bias = 1;
 
-  MatrixXd z1 = MatrixXd::Zero(measure_1_dim, 1);
-  MatrixXd z2 = MatrixXd::Zero(measure_2_dim, 1);
+  VectorXd z1 = VectorXd::Zero(measure_1_dim);
+  VectorXd z2 = VectorXd::Zero(measure_2_dim);
 
   MatrixXd R1 = MatrixXd::Identity(measure_1_dim, measure_1_dim) * z_filter_s * z_filter_s;
   MatrixXd R2 = MatrixXd::Identity(measure_2_dim, measure_2_dim) * z_filter_s * z_filter_s;
 
-  MatrixXd u = MatrixXd::Zero(control_dim, 1);
+  VectorXd u = VectorXd::Zero(control_dim);
 
   // Add some noise
   std::default_random_engine generator;
