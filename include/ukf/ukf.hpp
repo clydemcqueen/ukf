@@ -38,6 +38,8 @@ namespace ukf
   void unscented_transform(const ResidualFn &r_x_fn, const UnscentedMeanFn &mean_fn, const MatrixXd &sigma_points,
                            const RowVectorXd &Wm, const RowVectorXd &Wc, VectorXd &x, MatrixXd &P);
 
+  bool outlier(const VectorXd &y_z, const MatrixXd &P_z_inverse, const double distance);
+
   bool valid_x(const VectorXd &x);
 
   bool valid_P(const MatrixXd &P);
@@ -51,6 +53,7 @@ namespace ukf
     // Inputs
     int state_dim_;             // Size of state space
     MatrixXd Q_;                // Process covariance
+    double outlier_distance_;   // Use a Mahalanobis test to reject outliers, expressed in std deviations from x
 
     // Additional inputs: constants for generating Merwe sigma points
     double alpha_;              // Generally 0≤α≤1, larger value spreads the sigma points further from the mean
@@ -113,6 +116,11 @@ namespace ukf
       Q_ = Q;
     }
 
+    void set_outlier_distance(const double outlier_distance)
+    {
+      outlier_distance_ = outlier_distance;
+    }
+
     void set_f_fn(const TransitionFn &f_fn)
     { f_fn_ = f_fn; }
 
@@ -135,7 +143,7 @@ namespace ukf
 
     void predict(double dt, const VectorXd &u);
 
-    void update(const VectorXd &z, const MatrixXd &R);
+    bool update(const VectorXd &z, const MatrixXd &R);
   };
 
 } // namespace ukf

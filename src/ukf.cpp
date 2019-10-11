@@ -8,7 +8,7 @@ namespace ukf
   using namespace Eigen;
 
   //========================================================================
-  // Utility
+  // Unscented math
   //========================================================================
 
   bool is_finite(const MatrixXd &m)
@@ -45,10 +45,6 @@ namespace ukf
 
     return true;
   }
-
-  //========================================================================
-  // Unscented math
-  //========================================================================
 
   // Square root of a matrix
   void cholesky(const MatrixXd &in, MatrixXd &out)
@@ -129,11 +125,18 @@ namespace ukf
     P = unscented_covariance(r_x_fn, sigma_points, Wc, x);
   }
 
+  // Use a Mahalanobis test to reject outliers, expressed in std deviations from x
+  bool outlier(const VectorXd &y_z, const MatrixXd &P_z_inverse, const double distance)
+  {
+    return y_z.dot(P_z_inverse * y_z) >= distance * distance;
+  }
+
   //========================================================================
   // UnscentedKalmanFilter
   //========================================================================
 
   UnscentedKalmanFilter::UnscentedKalmanFilter(int state_dim, double alpha, double beta, int kappa) :
+    outlier_distance_{std::numeric_limits<double>::max()},
     state_dim_{state_dim},
     alpha_{alpha},
     beta_{beta},
@@ -181,7 +184,7 @@ namespace ukf
     P_ += Q_ * dt;
   }
 
-  void UnscentedKalmanFilter::update(const VectorXd &z, const MatrixXd &R)
+  bool UnscentedKalmanFilter::update(const VectorXd &z, const MatrixXd &R)
   {
     int measurement_dim = z.rows();
 
@@ -213,14 +216,24 @@ namespace ukf
     }
 
     // Kalman gain
-    K_ = P_xz * P_z.inverse();
+    MatrixXd P_z_inverse = P_z.inverse();
+    K_ = P_xz * P_z_inverse;
     // assert(K_.rows() == state_dim_);
     // assert(K_.cols() == measurement_dim_);
 
-    // Combine measurement and prediction into a new estimate
+    // Compute the innovation
     MatrixXd y_z = r_z_fn_(z, x_z);
+
+    // Reject outliers
+    if (outlier_distance_ < std::numeric_limits<double>::max() && outlier(y_z, P_z_inverse, outlier_distance_)) {
+      return false;
+    }
+
+    // Combine measurement and prediction into a new estimate
     x_ = x_ + K_ * y_z;
     P_ = P_ - K_ * P_z * K_.transpose();
+
+    return true;
   }
 
 } // namespace ukf

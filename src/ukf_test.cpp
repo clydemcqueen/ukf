@@ -150,7 +150,9 @@ bool test_unscented_transform()
 }
 
 // Simple Newtonian filter with 2 DoF
-bool test_simple_filter()
+bool test_simple_filter(double q, double sd,
+                        double outlier_distance = std::numeric_limits<double>::max(),
+                        bool expect_many_outliers = false)
 {
   std::cout << "\n========= FILTER =========\n" << std::endl;
 
@@ -190,14 +192,29 @@ bool test_simple_filter()
                     z(1) = x(3);
                   });
 
+  // Process noise
+  filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * q);
+
+  // Outlier distance
+  filter.set_outlier_distance(outlier_distance);
+
   VectorXd z = VectorXd::Zero(measurement_dim);
-  MatrixXd R = MatrixXd::Identity(measurement_dim, measurement_dim);
+  MatrixXd R = MatrixXd::Identity(measurement_dim, measurement_dim) * sd * sd;
   VectorXd u = VectorXd::Zero(control_dim);
 
+  // Add some noise
+  std::default_random_engine generator;
+  std::normal_distribution<double> distribution(0, sd);
+
   int num_i = 100;
+  int num_outliers = 0;
   for (int i = 0; i < num_i; ++i) {
     filter.predict(0.1, u);
-    filter.update(z, R);
+    z(0) = 0 + distribution(generator);
+    z(1) = 0 + distribution(generator);
+    if (!filter.update(z, R)) {
+      num_outliers++;
+    }
     if (!filter.valid()) {
       std::cout << "INVALID iteration " << i << std::endl;
       return false;
@@ -211,7 +228,21 @@ bool test_simple_filter()
   std::cout << "estimated x:" << std::endl << filter.x() << std::endl;
   std::cout << "estimated P:" << std::endl << filter.P() << std::endl;
 
-  return true;
+  if (expect_many_outliers) {
+    std::cout << "expected > " << num_i / 2 << " outliers, got " << num_outliers;
+  } else {
+    std::cout << "expected < " << num_i / 2 << " outliers, got " << num_outliers;
+  }
+
+  bool many_outliers = num_outliers > num_i / 2;
+  bool ok = (expect_many_outliers && many_outliers) || (!expect_many_outliers && !many_outliers);
+  if (ok) {
+    std::cout << ", OK" << std::endl;
+    return true;
+  } else {
+    std::cout << ", FAILED" << std::endl;
+    return false;
+  }
 }
 
 // Implement a filter with drag using one of 2 strategies:
@@ -713,7 +744,9 @@ int main(int argc, char **argv)
     test_valid() &&
     test_cholesky() &&
     test_unscented_transform() &&
-    test_simple_filter() &&
+    test_simple_filter(0.01, 0.1) &&
+    test_simple_filter(0.01, 0.2, 5.0, false) &&
+    test_simple_filter(0.01, 0.2, 1.0, true) &&
     test_1d_drag_filter(false, "ukf_1d_drag_discover_ax.txt") &&
     test_1d_drag_filter(true, "ukf_1d_drag_control_ax.txt") &&
     test_angle_filter(1000, true) &&
@@ -724,9 +757,9 @@ int main(int argc, char **argv)
     test_fusion(100, 0.1, 10.0, false, false, 1.0);
 
   if (ok) {
-    std::cout << std::endl << "PASSED" << std::endl;
+    std::cout << std::endl << "PASSED ALL TESTS" << std::endl;
   } else {
-    std::cout << std::endl << "FAILED" << std::endl;
+    std::cout << std::endl << "FAILED A TEST" << std::endl;
   }
 
   return ok ? 0 : 1;
