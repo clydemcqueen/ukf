@@ -17,7 +17,7 @@ endif ()
 
 # Find packages
 find_package(ament_cmake REQUIRED)
-find_package(Eigen3)
+find_package(Eigen3 REQUIRED)
 
 # Local includes
 include_directories(

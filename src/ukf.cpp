@@ -33,15 +33,18 @@ namespace ukf
       return false;
     }
 
+#undef CHECK_EIGENVALUES
+#ifdef CHECK_EIGENVALUES
     EigenSolver<MatrixXd> eigen_solver(P);
     auto eigen_values = eigen_solver.eigenvalues();
     for (int r = 0; r < eigen_values.rows(); ++r) {
       auto eigen_value = eigen_values(r, 0);
       if (eigen_value.real() < 0) {
-        std::cout << "negative eigenvalue for P: " << std::endl << P << std::endl;
+        // std::cout << "negative eigenvalue for P: " << std::endl << P << std::endl;
         return false;
       }
     }
+#endif
 
     return true;
   }
