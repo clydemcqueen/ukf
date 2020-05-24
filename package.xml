@@ -16,7 +16,7 @@
 
     <buildtool_depend>ament_cmake</buildtool_depend>
 
-    <depend>Eigen3</depend>
+    <depend>eigen</depend>
 
     <export>
         <build_type>ament_cmake</build_type>
