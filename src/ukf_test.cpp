@@ -25,12 +25,13 @@ double norm_angle(double a)
 }
 
 template<typename DerivedA, typename DerivedB>
-bool allclose(const DenseBase<DerivedA> &a,
-              const DenseBase<DerivedB> &b,
-              const typename DerivedA::RealScalar &rtol = NumTraits<typename DerivedA::RealScalar>::dummy_precision(),
-              const typename DerivedA::RealScalar &atol = NumTraits<typename DerivedA::RealScalar>::epsilon())
+bool allclose(const DenseBase<DerivedA> & a,
+  const DenseBase<DerivedB> & b,
+  const typename DerivedA::RealScalar & rtol = NumTraits<typename DerivedA::RealScalar>::dummy_precision(),
+  const typename DerivedA::RealScalar & atol = NumTraits<typename DerivedA::RealScalar>::epsilon())
 {
-  return ((a.derived() - b.derived()).array().abs() <= (atol + rtol * b.derived().array().abs())).all();
+  return ((a.derived() - b.derived()).array().abs() <=
+    (atol + rtol * b.derived().array().abs())).all();
 }
 
 bool test_valid()
@@ -103,10 +104,10 @@ bool test_unscented_transform()
 
   double alpha{0.3}, beta{2};
   int kappa{0};
-  ukf::ResidualFn residual_x = [](const VectorXd &x, const VectorXd &mean) -> VectorXd
-  {
-    return x - mean;
-  };
+  ukf::ResidualFn residual_x = [](const VectorXd & x, const VectorXd & mean) -> VectorXd
+    {
+      return x - mean;
+    };
 
   for (int state_dim = 1; state_dim < 10; ++state_dim) {
     std::cout << state_dim << " dimension(s):" << std::endl;
@@ -136,14 +137,14 @@ bool test_unscented_transform()
     assert(x_f.rows() == x.rows() && x_f.cols() == 1);
     bool ok = allclose(x, x_f);
     std::cout << (ok ? "mean OK" : "mean FAIL") << std::endl;
-    if (!ok) return false;
+    if (!ok) { return false; }
 
     // Compute covariance of sigmas_p
     MatrixXd P_f = ukf::unscented_covariance(residual_x, sigmas_p, Wc, x_f) + Q;
     assert(P_f.rows() == P.rows() && P_f.cols() == P.cols());
     ok = allclose(P, P_f);
     std::cout << (ok ? "covar OK" : "covar FAIL") << std::endl;
-    if (!ok) return false;
+    if (!ok) { return false; }
   }
 
   return true;
@@ -151,8 +152,8 @@ bool test_unscented_transform()
 
 // Simple Newtonian filter with 2 DoF
 bool test_simple_filter(double q, double sd,
-                        double outlier_distance = std::numeric_limits<double>::max(),
-                        bool expect_many_outliers = false)
+  double outlier_distance = std::numeric_limits<double>::max(),
+  bool expect_many_outliers = false)
 {
   std::cout << "\n========= FILTER =========\n" << std::endl;
 
@@ -164,33 +165,33 @@ bool test_simple_filter(double q, double sd,
   ukf::UnscentedKalmanFilter filter(state_dim, 0.1, 2.0, 0);
 
   // State transition function
-  filter.set_f_fn([](const double dt, const VectorXd &u, Ref<VectorXd> x)
-                  {
-                    // Ignore u
-                    // ax and ay are discovered
+  filter.set_f_fn([](const double dt, const VectorXd & u, Ref<VectorXd> x)
+    {
+      // Ignore u
+      // ax and ay are discovered
 
-                    // vx += ax * dt
-                    x(1) += x(2) * dt;
+      // vx += ax * dt
+      x(1) += x(2) * dt;
 
-                    // x += vx * dt
-                    x(0) += x(1) * dt;
+      // x += vx * dt
+      x(0) += x(1) * dt;
 
-                    // vy += ay * dt
-                    x(4) += x(5) * dt;
+      // vy += ay * dt
+      x(4) += x(5) * dt;
 
-                    // y += vy * dt
-                    x(3) += x(4) * dt;
-                  });
+      // y += vy * dt
+      x(3) += x(4) * dt;
+    });
 
   // Measurement function
-  filter.set_h_fn([](const Ref<const VectorXd> &x, Ref<VectorXd> z)
-                  {
-                    // x
-                    z(0) = x(0);
+  filter.set_h_fn([](const Ref<const VectorXd> & x, Ref<VectorXd> z)
+    {
+      // x
+      z(0) = x(0);
 
-                    // y
-                    z(1) = x(3);
-                  });
+      // y
+      z(1) = x(3);
+    });
 
   // Process noise
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * q);
@@ -252,7 +253,7 @@ bool test_simple_filter(double q, double sd,
 //
 // In tests the control strategy produces better results.
 // The drag constant is a function of the drag coefficient, surface area and mass, and must be known in advance.
-bool test_1d_drag_filter(bool use_control, std::string filename)
+bool test_1d_drag_filter(bool use_control, const std::string & filename)
 {
   std::cout << "\n========= 1D DRAG FILTER " << use_control << " =========\n" << std::endl;
 
@@ -271,37 +272,37 @@ bool test_1d_drag_filter(bool use_control, std::string filename)
 
   // State transition function
   if (use_control) {
-    filter.set_f_fn([drag_constant](const double dt, const VectorXd &u, Ref<VectorXd> x)
-                    {
-                      // ax = thrust_ax - vx * vx * drag_constant
-                      double ax = u(0, 0) - x(1) * x(1) * drag_constant;
+    filter.set_f_fn([drag_constant](const double dt, const VectorXd & u, Ref<VectorXd> x)
+      {
+        // ax = thrust_ax - vx * vx * drag_constant
+        double ax = u(0, 0) - x(1) * x(1) * drag_constant;
 
-                      // vx += ax * dt
-                      x(1) += ax * dt;
+        // vx += ax * dt
+        x(1) += ax * dt;
 
-                      // x += vx * dt
-                      x(0) += x(1) * dt;
-                    });
+        // x += vx * dt
+        x(0) += x(1) * dt;
+      });
   } else {
-    filter.set_f_fn([](const double dt, const VectorXd &u, Ref<VectorXd> x)
-                    {
-                      // Ignore u
-                      // ax is discovered, drag is hidden inside ax
+    filter.set_f_fn([](const double dt, const VectorXd & u, Ref<VectorXd> x)
+      {
+        // Ignore u
+        // ax is discovered, drag is hidden inside ax
 
-                      // vx += ax * dt
-                      x(1) += x(2) * dt;
+        // vx += ax * dt
+        x(1) += x(2) * dt;
 
-                      // x += vx * dt
-                      x(0) += x(1) * dt;
-                    });
+        // x += vx * dt
+        x(0) += x(1) * dt;
+      });
   }
 
   // Measurement function
-  filter.set_h_fn([](const Ref<const VectorXd> &x, Ref<VectorXd> z)
-                  {
-                    // x
-                    z(0) = x(0);
-                  });
+  filter.set_h_fn([](const Ref<const VectorXd> & x, Ref<VectorXd> z)
+    {
+      // x
+      z(0) = x(0);
+    });
 
   VectorXd z = VectorXd::Zero(measurement_dim);
   MatrixXd R = MatrixXd::Identity(measurement_dim, measurement_dim) * z_stddev;
@@ -405,82 +406,82 @@ bool test_angle_filter(int iterations, bool update)
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * 0.01);
 
   // State transition function
-  filter.set_f_fn([](const double dt, const VectorXd &u, Ref<VectorXd> x)
-                  {
-                    // Ignore u
-                    // vy is discovered
+  filter.set_f_fn([](const double dt, const VectorXd & u, Ref<VectorXd> x)
+    {
+      // Ignore u
+      // vy is discovered
 
-                    // y += vy * dt
-                    x(0) = norm_angle(x(0) + x(1) * dt);
-                  });
+      // y += vy * dt
+      x(0) = norm_angle(x(0) + x(1) * dt);
+    });
 
   // Measurement function
-  filter.set_h_fn([](const Ref<const VectorXd> &x, Ref<VectorXd> z)
-                  {
-                    // y
-                    z(0) = x(0);
-                  });
+  filter.set_h_fn([](const Ref<const VectorXd> & x, Ref<VectorXd> z)
+    {
+      // y
+      z(0) = x(0);
+    });
 
   // Residual x function
-  filter.set_r_x_fn([](const Ref<const VectorXd> &x, const VectorXd &mean) -> VectorXd
-                    {
-                      VectorXd residual = x - mean;
-                      residual(0, 0) = norm_angle(residual(0, 0));
-                      return residual;
-                    });
+  filter.set_r_x_fn([](const Ref<const VectorXd> & x, const VectorXd & mean) -> VectorXd
+    {
+      VectorXd residual = x - mean;
+      residual(0, 0) = norm_angle(residual(0, 0));
+      return residual;
+    });
 
   // Residual z function
-  filter.set_r_z_fn([](const Ref<const MatrixXd> &z, const VectorXd &mean) -> VectorXd
-                    {
-                      VectorXd residual = z - mean;
-                      residual(0, 0) = norm_angle(residual(0, 0));
-                      return residual;
-                    });
+  filter.set_r_z_fn([](const Ref<const MatrixXd> & z, const VectorXd & mean) -> VectorXd
+    {
+      VectorXd residual = z - mean;
+      residual(0, 0) = norm_angle(residual(0, 0));
+      return residual;
+    });
 
   // The x and z mean functions need to compute the mean of angles, which doesn't have a precise meaning.
   // See https://en.wikipedia.org/wiki/Mean_of_circular_quantities for one idea.
 
   // Unscented mean x function
-  filter.set_mean_x_fn([](const MatrixXd &sigma_points, const RowVectorXd &Wm) -> VectorXd
-                       {
-                         VectorXd mean = MatrixXd::Zero(sigma_points.rows(), 1);
+  filter.set_mean_x_fn([](const MatrixXd & sigma_points, const RowVectorXd & Wm) -> VectorXd
+    {
+      VectorXd mean = MatrixXd::Zero(sigma_points.rows(), 1);
 
-                         assert(mean.rows() == 2);
+      assert(mean.rows() == 2);
 
-                         double sum_y_sin = 0.0;
-                         double sum_y_cos = 0.0;
+      double sum_y_sin = 0.0;
+      double sum_y_cos = 0.0;
 
-                         for (int i = 0; i < sigma_points.cols(); ++i) {
-                           sum_y_sin += Wm(0, i) * sin(sigma_points(0, i));
-                           sum_y_cos += Wm(0, i) * cos(sigma_points(0, i));
+      for (int i = 0; i < sigma_points.cols(); ++i) {
+        sum_y_sin += Wm(0, i) * sin(sigma_points(0, i));
+        sum_y_cos += Wm(0, i) * cos(sigma_points(0, i));
 
-                           mean(1, 0) += Wm(0, i) * sigma_points(1, i);
-                         }
+        mean(1, 0) += Wm(0, i) * sigma_points(1, i);
+      }
 
-                         mean(0, 0) = atan2(sum_y_sin, sum_y_cos);
+      mean(0, 0) = atan2(sum_y_sin, sum_y_cos);
 
-                         return mean;
-                       });
+      return mean;
+    });
 
   // Unscented mean z function
-  filter.set_mean_z_fn([](const MatrixXd &sigma_points, const RowVectorXd &Wm) -> VectorXd
-                       {
-                         VectorXd mean = VectorXd::Zero(sigma_points.rows());
+  filter.set_mean_z_fn([](const MatrixXd & sigma_points, const RowVectorXd & Wm) -> VectorXd
+    {
+      VectorXd mean = VectorXd::Zero(sigma_points.rows());
 
-                         assert(mean.rows() == 1);
+      assert(mean.rows() == 1);
 
-                         double sum_y_sin = 0.0;
-                         double sum_y_cos = 0.0;
+      double sum_y_sin = 0.0;
+      double sum_y_cos = 0.0;
 
-                         for (int i = 0; i < sigma_points.cols(); ++i) {
-                           sum_y_sin += Wm(0, i) * sin(sigma_points(0, i));
-                           sum_y_cos += Wm(0, i) * cos(sigma_points(0, i));
-                         }
+      for (int i = 0; i < sigma_points.cols(); ++i) {
+        sum_y_sin += Wm(0, i) * sin(sigma_points(0, i));
+        sum_y_cos += Wm(0, i) * cos(sigma_points(0, i));
+      }
 
-                         mean(0, 0) = atan2(sum_y_sin, sum_y_cos);
+      mean(0, 0) = atan2(sum_y_sin, sum_y_cos);
 
-                         return mean;
-                       });
+      return mean;
+    });
 
   VectorXd z = VectorXd::Zero(measurement_dim);
   MatrixXd R = MatrixXd::Identity(measurement_dim, measurement_dim) * z_stddev;
@@ -573,7 +574,8 @@ bool test_angle_filter(int iterations, bool update)
 }
 
 // Fuse 2 sensors, one measures 2 variables, the other measures 1
-bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measure_1, bool measure_2, double q)
+bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measure_1, bool measure_2,
+  double q)
 {
   std::cout << "\n========= FUSION FILTER =========\n" << std::endl;
 
@@ -593,42 +595,42 @@ bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measur
   filter.set_Q(MatrixXd::Identity(state_dim, state_dim) * q);
 
   // State transition function
-  auto f_fn = [](const double dt, const VectorXd &u, Ref<VectorXd> x)
-  {
-    // Ignore u
-    // ax and ay are discovered
+  auto f_fn = [](const double dt, const VectorXd & u, Ref<VectorXd> x)
+    {
+      // Ignore u
+      // ax and ay are discovered
 
-    // vx += ax * dt
-    x_vx += x_ax * dt;
+      // vx += ax * dt
+      x_vx += x_ax * dt;
 
-    // x += vx * dt
-    x_x += x_vx * dt;
+      // x += vx * dt
+      x_x += x_vx * dt;
 
-    // vy += ay * dt
-    x_vy += x_ay * dt;
+      // vy += ay * dt
+      x_vy += x_ay * dt;
 
-    // y += vy * dt
-    x_y += x_vy * dt;
-  };
+      // y += vy * dt
+      x_y += x_vy * dt;
+    };
 
   filter.set_f_fn(f_fn);
 
   // Measure 1 function: measure x
-  auto measure_1_fn = [](const Ref<const VectorXd> &x, Ref<VectorXd> z)
-  {
-    // x
-    z(0) = x_x;
-  };
+  auto measure_1_fn = [](const Ref<const VectorXd> & x, Ref<VectorXd> z)
+    {
+      // x
+      z(0) = x_x;
+    };
 
   // Measure 2 function: measure x and y
-  auto measure_2_fn = [](const Ref<const VectorXd> &x, Ref<VectorXd> z)
-  {
-    // x
-    z(0) = x_x;
+  auto measure_2_fn = [](const Ref<const VectorXd> & x, Ref<VectorXd> z)
+    {
+      // x
+      z(0) = x_x;
 
-    // y
-    z(1) = x_y;
-  };
+      // y
+      z(1) = x_y;
+    };
 
   double x_mean = 100;
   double y_mean = 1000;
@@ -736,12 +738,11 @@ bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measur
   return true;
 }
 
-int main(int argc, char **argv)
+int main(int argc, char ** argv)
 {
   test_generate_sigmas();
 
-  bool ok =
-    test_valid() &&
+  bool ok = test_valid() &&
     test_cholesky() &&
     test_unscented_transform() &&
     test_simple_filter(0.01, 0.1) &&
