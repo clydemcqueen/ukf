@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <vector>
 
 namespace ukf
 {
@@ -33,7 +34,6 @@ bool valid_P(const MatrixXd & P)
     return false;
   }
 
-#undef CHECK_EIGENVALUES
 #ifdef CHECK_EIGENVALUES
   EigenSolver<MatrixXd> eigen_solver(P);
   auto eigen_values = eigen_solver.eigenvalues();
@@ -133,6 +133,68 @@ void unscented_transform(const ResidualFn & r_x_fn, const UnscentedMeanFn & mean
 bool outlier(const VectorXd & y_z, const MatrixXd & P_z_inverse, const double distance)
 {
   return y_z.dot(P_z_inverse * y_z) >= distance * distance;
+}
+
+//========================================================================
+// Process noise
+//========================================================================
+
+VectorXd flatten(const MatrixXd & a)
+{
+  MatrixXd b = a.transpose();
+  return Map<VectorXd>(b.data(), b.cols() * b.rows());
+}
+
+MatrixXd order_by_derivative(const MatrixXd & q, const int num_var, const int num_der)
+{
+  // Build a map from old index to new index
+  std::vector<int> new_index;
+  for (int i = 0; i < num_var * num_der; ++i) {
+    int der = i % num_der;
+    int var = i / num_der;
+    new_index.push_back(der * num_var + var);
+  }
+
+  MatrixXd result = MatrixXd::Zero(num_var * num_der, num_var * num_der);
+
+  for (int row = 0; row < num_var * num_der; ++row) {
+    for (int col = 0; col < num_var * num_der; ++col) {
+      result(new_index[row], new_index[col]) = q(row, col);
+    }
+  }
+
+  return result;
+}
+
+MatrixXd Q_discrete_white_noise_1v(int num_der, const double dt, const double variance)
+{
+  assert(num_der == 2 || num_der == 3);
+  MatrixXd Q = MatrixXd(num_der, num_der);
+
+  if (num_der == 2) {
+    Q << 0.25 * pow(dt, 4), 0.5 * pow(dt, 3),
+      0.5 * pow(dt, 3), pow(dt, 2);
+  } else {
+    Q <<
+      0.25 * pow(dt, 4), 0.5 * pow(dt, 3), 0.5 * pow(dt, 2),
+      0.5 * pow(dt, 3), pow(dt, 2), dt,
+      0.5 * pow(dt, 2), dt, 1.0;
+  }
+
+  return Q * variance;
+}
+
+MatrixXd Q_discrete_white_noise_Xv(const int num_der, const double dt, const VectorXd & variances)
+{
+  int variables = variances.count();
+  MatrixXd Q = MatrixXd::Zero(num_der * variables, num_der * variables);
+
+  for (int i = 0; i < variables; ++i) {
+    Q.block(num_der * i, num_der * i, num_der, num_der) =
+      Q_discrete_white_noise_1v(num_der, dt, variances(i));
+  }
+
+  return Q;
 }
 
 //========================================================================

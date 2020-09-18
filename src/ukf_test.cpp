@@ -41,8 +41,13 @@ bool test_valid()
   MatrixXd good_P = MatrixXd::Zero(2, 2);
   MatrixXd bad_P = MatrixXd::Zero(2, 2);
   good_P << 1, 0.1, 0.1, 2;
+  bool ok = ukf::valid_P(good_P);
+
+#ifdef CHECK_EIGENVALUES
   bad_P << 0, 1, -2, -3;
-  bool ok = ukf::valid_P(good_P) && !ukf::valid_P(bad_P);
+  ok == ok && !ukf::valid_P(bad_P);
+#endif
+
   std::cout << (ok ? "Valid OK" : "Valid FAIL") << std::endl;
   return ok;
 }
@@ -738,9 +743,57 @@ bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measur
   return true;
 }
 
+bool test_flatten()
+{
+  std::cout << "\n========= FLATTEN =========\n" << std::endl;
+
+  MatrixXd m = MatrixXd(3, 3);
+  m << 1, 2, 3, 4, 5, 6, 7, 8, 9;
+
+  VectorXd v = VectorXd(9);
+  v << 1, 2, 3, 4, 5, 6, 7, 8, 9;
+
+  return ukf::flatten(m) == v;
+}
+
+bool test_order_by_derivative()
+{
+  std::cout << "\n========= ORDER BY DERIVATIVE =========\n" << std::endl;
+
+  MatrixXd input = MatrixXd(4, 4);
+  input << 1, 2, 3, 4,
+    5, 6, 7, 8,
+    9, 10, 11, 12,
+    13, 14, 15, 16;
+
+  MatrixXd reference = MatrixXd(4, 4);
+  reference << 1, 3, 2, 4,
+    9, 11, 10, 12,
+    5, 7, 6, 8,
+    13, 15, 14, 16;
+
+  return ukf::order_by_derivative(input, 2, 2) == reference;
+}
+
+void test_process_noise()
+{
+  double dt = 0.1;
+
+  for (int derivatives = 2; derivatives < 4; ++derivatives) {
+    std::cout << derivatives << " derivatives:" << std::endl;
+
+    for (int variables = 1; variables < 4; ++variables) {
+      std::cout << variables << " variable(s):" << std::endl;
+      auto Q = ukf::Q_discrete_white_noise_Xv(derivatives, dt, VectorXd::Ones(variables));
+      std::cout << Q << std::endl;
+    }
+  }
+}
+
 int main(int argc, char ** argv)
 {
   test_generate_sigmas();
+  test_process_noise();
 
   bool ok = test_valid() &&
     test_cholesky() &&
@@ -755,7 +808,9 @@ int main(int argc, char ** argv)
     test_fusion(100, 0.1, 10.0, true, true, 1.0) &&
     test_fusion(100, 0.1, 10.0, true, false, 1.0) &&
     test_fusion(100, 0.1, 10.0, false, true, 1.0) &&
-    test_fusion(100, 0.1, 10.0, false, false, 1.0);
+    test_fusion(100, 0.1, 10.0, false, false, 1.0) &&
+    test_flatten() &&
+    test_order_by_derivative();
 
   if (ok) {
     std::cout << std::endl << "PASSED ALL TESTS" << std::endl;

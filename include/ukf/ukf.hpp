@@ -45,7 +45,29 @@ bool outlier(const VectorXd & y_z, const MatrixXd & P_z_inverse, double distance
 
 bool valid_x(const VectorXd & x);
 
+// Checking eigenvalues is pretty slow
+#undef CHECK_EIGENVALUES
 bool valid_P(const MatrixXd & P);
+
+//========================================================================
+// Process noise
+//========================================================================
+
+// Flatten a matrix, row order
+VectorXd flatten(const MatrixXd & a);
+
+// Take a matrix ordered by variable, and return a matrix ordered by derivative
+// Example input: a matrix ordered by [x, x', y, y']T
+// Output: a matrix ordered by [x, y, x', y']T
+MatrixXd order_by_derivative(const MatrixXd & q, int num_var, int num_der);
+
+// Generate a Q matrix for 1 independent variable with 2 or 3 derivatives
+// I.e., [x, x']T or [x, x', x'']T
+MatrixXd Q_discrete_white_noise_1v(int num_der, double dt, double variance);
+
+// Generate a Q matrix for several independent variables with 2 or 3 derivatives
+// E.g., [x, x', x'', y, y', y'']T
+MatrixXd Q_discrete_white_noise_Xv(int num_der, double dt, const VectorXd & variances);
 
 //========================================================================
 // UnscentedKalmanFilter
