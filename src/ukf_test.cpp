@@ -2,6 +2,7 @@
 #include <fstream>
 #include <random>
 
+#include "gtest/gtest.h"
 #include "ukf/ukf.hpp"
 
 using namespace Eigen;
@@ -34,25 +35,22 @@ bool allclose(const DenseBase<DerivedA> & a,
     (atol + rtol * b.derived().array().abs())).all();
 }
 
-bool test_valid()
+TEST(UnscentedTest, ValidTest)
 {
   std::cout << "\n========= VALID =========\n" << std::endl;
 
   MatrixXd good_P = MatrixXd::Zero(2, 2);
   MatrixXd bad_P = MatrixXd::Zero(2, 2);
   good_P << 1, 0.1, 0.1, 2;
-  bool ok = ukf::valid_P(good_P);
+  EXPECT_TRUE(ukf::valid_P(good_P));
 
 #ifdef CHECK_EIGENVALUES
   bad_P << 0, 1, -2, -3;
-  ok == ok && !ukf::valid_P(bad_P);
+  EXPECT_FALSE(ukf::valid_P(bad_P));
 #endif
-
-  std::cout << (ok ? "Valid OK" : "Valid FAIL") << std::endl;
-  return ok;
 }
 
-bool test_cholesky()
+TEST(UnscentedTest, CholeskyTest)
 {
   std::cout << "\n========= CHOLESKY =========\n" << std::endl;
 
@@ -64,12 +62,10 @@ bool test_cholesky()
 
   MatrixXd square = s * s.transpose();
 
-  bool ok = allclose(t, square);
-  std::cout << (ok ? "Cholesky OK" : "Cholesky FAIL") << std::endl;
-  return ok;
+  EXPECT_TRUE(allclose(t, square));
 }
 
-void test_generate_sigmas()
+TEST(UnscentedTest, GenerateSigmasTest)
 {
   std::cout << "\n========= GENERATE SIGMA POINTS =========\n" << std::endl;
 
@@ -103,7 +99,7 @@ void test_generate_sigmas()
   }
 }
 
-bool test_unscented_transform()
+TEST(UnscentedTest, unscented_transform)
 {
   std::cout << "\n========= UNSCENTED TRANSFORM =========\n" << std::endl;
 
@@ -140,19 +136,13 @@ bool test_unscented_transform()
     // Compute mean of sigmas_p
     VectorXd x_f = ukf::unscented_mean(sigmas_p, Wm);
     assert(x_f.rows() == x.rows() && x_f.cols() == 1);
-    bool ok = allclose(x, x_f);
-    std::cout << (ok ? "mean OK" : "mean FAIL") << std::endl;
-    if (!ok) { return false; }
+    EXPECT_TRUE(allclose(x, x_f));
 
     // Compute covariance of sigmas_p
     MatrixXd P_f = ukf::unscented_covariance(residual_x, sigmas_p, Wc, x_f) + Q;
     assert(P_f.rows() == P.rows() && P_f.cols() == P.cols());
-    ok = allclose(P, P_f);
-    std::cout << (ok ? "covar OK" : "covar FAIL") << std::endl;
-    if (!ok) { return false; }
+    EXPECT_TRUE(allclose(P, P_f));
   }
-
-  return true;
 }
 
 // Simple Newtonian filter with 2 DoF
@@ -743,7 +733,7 @@ bool test_fusion(int iterations, double z_data_s, double z_filter_s, bool measur
   return true;
 }
 
-bool test_flatten()
+TEST(UnscentedTest, flatten)
 {
   std::cout << "\n========= FLATTEN =========\n" << std::endl;
 
@@ -753,10 +743,10 @@ bool test_flatten()
   VectorXd v = VectorXd(9);
   v << 1, 2, 3, 4, 5, 6, 7, 8, 9;
 
-  return ukf::flatten(m) == v;
+  EXPECT_EQ(ukf::flatten(m), v);
 }
 
-bool test_order_by_derivative()
+TEST(UnscentedTest, order_by_derivative)
 {
   std::cout << "\n========= ORDER BY DERIVATIVE =========\n" << std::endl;
 
@@ -772,10 +762,10 @@ bool test_order_by_derivative()
     5, 7, 6, 8,
     13, 15, 14, 16;
 
-  return ukf::order_by_derivative(input, 2, 2) == reference;
+  EXPECT_EQ(ukf::order_by_derivative(input, 2, 2), reference);
 }
 
-void test_process_noise()
+TEST(UnscentedTest, ProcessNoiseTest)
 {
   double dt = 0.1;
 
@@ -790,33 +780,17 @@ void test_process_noise()
   }
 }
 
-int main(int argc, char ** argv)
+TEST(UnscentedTest, FilterTest)
 {
-  test_generate_sigmas();
-  test_process_noise();
-
-  bool ok = test_valid() &&
-    test_cholesky() &&
-    test_unscented_transform() &&
-    test_simple_filter(0.01, 0.1) &&
-    test_simple_filter(0.01, 0.2, 5.0, false) &&
-    test_simple_filter(0.01, 0.2, 1.0, true) &&
-    test_1d_drag_filter(false, "ukf_1d_drag_discover_ax.txt") &&
-    test_1d_drag_filter(true, "ukf_1d_drag_control_ax.txt") &&
-    test_angle_filter(1000, true) &&
-    test_angle_filter(1000, false) &&
-    test_fusion(100, 0.1, 10.0, true, true, 1.0) &&
-    test_fusion(100, 0.1, 10.0, true, false, 1.0) &&
-    test_fusion(100, 0.1, 10.0, false, true, 1.0) &&
-    test_fusion(100, 0.1, 10.0, false, false, 1.0) &&
-    test_flatten() &&
-    test_order_by_derivative();
-
-  if (ok) {
-    std::cout << std::endl << "PASSED ALL TESTS" << std::endl;
-  } else {
-    std::cout << std::endl << "FAILED A TEST" << std::endl;
-  }
-
-  return ok ? 0 : 1;
+  EXPECT_TRUE(test_simple_filter(0.01, 0.1));
+  EXPECT_TRUE(test_simple_filter(0.01, 0.2, 5.0, false));
+  EXPECT_TRUE(test_simple_filter(0.01, 0.2, 1.0, true));
+  EXPECT_TRUE(test_1d_drag_filter(false, "ukf_1d_drag_discover_ax.txt"));
+  EXPECT_TRUE(test_1d_drag_filter(true, "ukf_1d_drag_control_ax.txt"));
+  EXPECT_TRUE(test_angle_filter(1000, true));
+  EXPECT_TRUE(test_angle_filter(1000, false));
+  EXPECT_TRUE(test_fusion(100, 0.1, 10.0, true, true, 1.0));
+  EXPECT_TRUE(test_fusion(100, 0.1, 10.0, true, false, 1.0));
+  EXPECT_TRUE(test_fusion(100, 0.1, 10.0, false, true, 1.0));
+  EXPECT_TRUE(test_fusion(100, 0.1, 10.0, false, false, 1.0));
 }
