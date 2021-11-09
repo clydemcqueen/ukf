@@ -38,11 +38,14 @@ ament_export_libraries(ukf)
 # Test
 #=============
 
-add_executable(
-  ukf_test
-  src/ukf_test.cpp
-  src/ukf.cpp
-)
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(
+    ukf_test
+    src/ukf_test.cpp
+    src/ukf.cpp
+  )
+endif()
 
 #=============
 # Install
@@ -60,12 +63,6 @@ install(
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
-)
-
-# Install executable
-install(
-  TARGETS ukf_test
-  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()
